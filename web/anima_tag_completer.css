@@ -97,6 +97,13 @@
   cursor: pointer;
   font-size: 16px !important;
   line-height: 1;
+  margin: 0 0 0 -6px;
+  padding: 0;
+  width: 26px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0.5;
   transition: opacity 0.3s ease;
 
@@ -113,11 +120,8 @@
 
 .tag-cluster-favorite-btn {
   align-self: stretch;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 8px;
   height: auto;
+  margin-left: 0;
 }
 .tag-cluster-items {
   display: flex;
@@ -198,7 +202,6 @@
     color: gray;
     line-height: 1;
     font-size: 40px;
-    /* step-end отключает плавную анимацию между кадрами */
     animation: search-anim 1s step-end infinite;
   }
 }
@@ -214,12 +217,12 @@
 
 @keyframes search-anim {
   0% {
-    transform: scaleX(1); /* Пауза в исходном виде (0% - 40%) */
+    transform: scaleX(1);
   }
   40% {
-    transform: scaleX(-1); /* Мгновенный разворот и пауза (40% - 90%) */
+    transform: scaleX(-1);
   }
   90% {
-    transform: scaleX(1); /* Возврат в исходное состояние перед повтором */
+    transform: scaleX(1);
   }
 }

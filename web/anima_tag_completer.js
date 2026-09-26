@@ -42,7 +42,7 @@ function getActiveSources() {
     }
   };
 
-  const sources = ["custom"]; // custom работает всегда и не может быть отключен
+  const sources = ["custom"];
   const toggleable = ["Danbooru", "Gelbooru", "Safebooru", "ThetaCursed"];
   for (const src of toggleable) {
     if (get(`AnimaTagCompleter.Source.${src}`, true)) {
@@ -77,6 +77,7 @@ function getSettings() {
 
 const TRANSLATIONS = {
   en: {
+    language: { name: "Interface language", tooltip: "Requires a page reload to take effect", options: { en: "English", ru: "Русский" } },
     enable: { name: "Enable extension", tooltip: "On/Off TagCompleter" },
     favMode: {
       name: "How to show favorite tags",
@@ -94,17 +95,16 @@ const TRANSLATIONS = {
     },
     maxSuggestions: { name: "Maximum number of suggestions" },
     delimiter: {
-      name: "Character inserted after a tag, before the space",
+      name: "Delimiter",
       tooltip: "A space is always inserted after the tag, the delimiter is inserted before this space",
       options: { comma: ", (comma)", period: ". (period)", none: "None" },
     },
-    artistPrefix: { name: "Prefix inserted before Artist-category tags", tooltip: "@ is standard for Anima" },
+    artistPrefix: { name: "Prefix before Artist category tags", tooltip: "@ is standard for Anima" },
     tagDisplayMode: {
       name: "Tag display mode",
       tooltip: "'All matches' lists every match, including duplicates from different sources. 'Highest score' collapses duplicates to a single entry with the best score.",
       options: { all: "All matches", highest: "Highest score" },
     },
-    language: { name: "Interface language", tooltip: "Requires a page reload to take effect", options: { en: "English", ru: "Русский" } },
     sources: {
       danbooru: { name: "Danbooru source", tooltip: "Enable/disable tag search from Danbooru" },
       gelbooru: { name: "Gelbooru source", tooltip: "Enable/disable tag search from Gelbooru" },
@@ -113,11 +113,12 @@ const TRANSLATIONS = {
     },
   },
   ru: {
+    language: { name: "Язык интерфейса", tooltip: "Для применения нужна перезагрузка страницы", options: { en: "English", ru: "Русский" } },
     enable: { name: "Включить расширение", tooltip: "Вкл/выкл TagCompleter" },
     favMode: {
       name: "Как показывать избранные теги",
       tooltip: "Выберите способ показа избранных тегов: по вводу '--fav' или автоматически при клике на текстовое поле",
-      options: { trigger: "Ввод --fav", focus: "Клике на текстовое поле" },
+      options: { trigger: "Ввод --fav", focus: "Клик на input" },
     },
     showDeprecated: { name: "Показывать теги из категории Deprecated" },
     scoreAbbr: {
@@ -130,7 +131,7 @@ const TRANSLATIONS = {
     },
     maxSuggestions: { name: "Максимум найденных тегов" },
     delimiter: {
-      name: "Символ, вставляемый после тега перед пробелом",
+      name: "Разделитель",
       tooltip: "Пробел вставляется всегда, разделитель вставляется перед этим пробелом.",
       options: { comma: ", (запятая)", period: ". (точка)", none: "Нет" },
     },
@@ -140,12 +141,11 @@ const TRANSLATIONS = {
       tooltip: "«Все совпадения» выводит каждый результат, включая дубликаты из разных источников. «Высший score» отображает только тег с максимальным score.",
       options: { all: "Все совпадения", highest: "Высший score" },
     },
-    language: { name: "Язык интерфейса", tooltip: "Для применения нужна перезагрузка страницы", options: { en: "English", ru: "Русский" } },
     sources: {
-      danbooru: { name: "Источник Danbooru", tooltip: "Включить/отключить поиск тегов из Danbooru" },
-      gelbooru: { name: "Источник Gelbooru", tooltip: "Включить/отключить поиск тегов из Gelbooru" },
-      safebooru: { name: "Источник Safebooru", tooltip: "Включить/отключить поиск тегов из Safebooru" },
-      thetacursed: { name: "Источник ThetaCursed", tooltip: "Включить/отключить поиск тегов из ThetaCursed" },
+      danbooru: { name: "Danbooru", tooltip: "Включить/отключить поиск тегов из Danbooru" },
+      gelbooru: { name: "Gelbooru", tooltip: "Включить/отключить поиск тегов из Gelbooru" },
+      safebooru: { name: "Safebooru", tooltip: "Включить/отключить поиск тегов из Safebooru" },
+      thetacursed: { name: "ThetaCursed", tooltip: "Включить/отключить поиск тегов из ThetaCursed" },
     },
   },
 };
@@ -175,7 +175,6 @@ function getCurrentFragment(el) {
   const before = value.slice(0, caret);
   const after = value.slice(caret);
 
-  // Находим начало фрагмента с учётом спецсимволов синтаксиса (неэкранированные скобки, двоеточие, запятая, перенос)
   const rawMatch = /(?:^|(?<!\\)[,\n\(\)\[\]\{\}:])([^\n,\(\)\[\]\{\}:]*)$/.exec(before);
   const rawStart = rawMatch ? caret - rawMatch[1].length : caret;
 
@@ -734,11 +733,11 @@ function renderResultsSection() {
       resultsEl.appendChild(clusterEl);
     } else {
       const tag = suggestions[i];
-      const itemIndex = i; // Сохраняем текущий индекс в блочную константу
+      const itemIndex = i;
       const item = createTagItemElement(tag, {
         highlightQuery: query,
         selected: i === state.selectedIndex,
-        onSelect: () => applySuggestion(itemIndex), // Передаем зафиксированный индекс
+        onSelect: () => applySuggestion(itemIndex),
         showFavoriteButton: true,
         favoriteTarget: suggestions[i],
       });
@@ -915,7 +914,7 @@ function applyTag(tag) {
   const { fullStart, fullEnd } = getCurrentFragment(el);
   const value = el.value ?? "";
 
-  const before = value.slice(0, fullStart);
+  let before = value.slice(0, fullStart);
   let after = value.slice(fullEnd);
 
   let tagText = normalizeTagText(tag.name);
@@ -925,32 +924,67 @@ function applyTag(tag) {
 
   const delimiterChar = settings.delimiter === "none" ? "" : settings.delimiter;
 
-  // 1. Проверяем, нужен ли пробел ПЕРЕД тегом
-  const needsLeadingSpace = before.length > 0 && !/[\s\(\[\{\\:]$/.test(before);   const leadingSpace = needsLeadingSpace ? " " : "";   let insertText = "";   let newCaret = 0;    // 2. Проверяем спецсимволы синтаксиса ПОСЛЕ места вставки   const hasPromptSyntaxAfter = /^[ \t]*[\:\)\]\}]/.test(after);
-  const hasTrailingComma = /^[ \t]*,/.test(after);
+  const insideWeightParen = /(?<!\\)\($/.test(before);
+  const weightParenMatch = insideWeightParen ? /^([^()]*)\)/.exec(after) : null;
 
-  if (hasPromptSyntaxAfter) {
-    after = after.replace(/^[ \t]*/, "");
-    insertText = `${leadingSpace}${tagText}`;
-    newCaret = before.length + insertText.length;
-  } else if (hasTrailingComma && delimiterChar === ",") {
-    insertText = `${leadingSpace}${tagText}`;
+  let insertText = "";
+  let newCaret = 0;
 
-    const hasNewlineAfterComma = /^[ \t]*,[ \t]*\r?\n/.test(after);
+  if (weightParenMatch) {
+    before = before.slice(0, -1);
 
-    if (hasNewlineAfterComma) {
-      after = after.replace(/^[ \t]*,[ \t]*/, ",");
-      newCaret = before.length + insertText.length + 1;
+    const needsLeadingSpace = before.length > 0 && !/\s$/.test(before);
+    const leadingSpace = needsLeadingSpace ? " " : "";
+
+    const weightContent = weightParenMatch[1];
+    const restAfter = after.slice(weightParenMatch[0].length);
+
+    const hasTrailingComma = /^[ \t]*,/.test(restAfter);
+
+    if (hasTrailingComma && delimiterChar === ",") {
+      insertText = `${leadingSpace}(${tagText}${weightContent})`;
+
+      const hasNewlineAfterComma = /^[ \t]*,[ \t]*\r?\n/.test(restAfter);
+      if (hasNewlineAfterComma) {
+        after = restAfter.replace(/^[ \t]*,[ \t]*/, ",");
+        newCaret = before.length + insertText.length + 1;
+      } else {
+        after = restAfter.replace(/^[ \t]*,[ \t]*/, ", ");
+        newCaret = before.length + insertText.length + 2;
+      }
     } else {
-      after = after.replace(/^[ \t]*,[ \t]*/, ", ");
-      newCaret = before.length + insertText.length + 2;
+      const needsTrailingSpace = !/^\s/.test(restAfter);
+      const trailingSpace = needsTrailingSpace ? " " : "";
+      insertText = `${leadingSpace}(${tagText}${weightContent})${delimiterChar}${trailingSpace}`;
+      after = restAfter;
+
+      newCaret = before.length + insertText.length;
     }
   } else {
-    const needsTrailingSpace = !/^\s/.test(after);
-    const trailingSpace = needsTrailingSpace ? " " : "";
-    insertText = `${leadingSpace}${tagText}${delimiterChar}${trailingSpace}`;
+    const needsLeadingSpace = before.length > 0 && !/\s$/.test(before);
+    const leadingSpace = needsLeadingSpace ? " " : "";
 
-    newCaret = before.length + insertText.length;
+    const hasTrailingComma = /^[ \t]*,/.test(after);
+
+    if (hasTrailingComma && delimiterChar === ",") {
+      insertText = `${leadingSpace}${tagText}`;
+
+      const hasNewlineAfterComma = /^[ \t]*,[ \t]*\r?\n/.test(after);
+
+      if (hasNewlineAfterComma) {
+        after = after.replace(/^[ \t]*,[ \t]*/, ",");
+        newCaret = before.length + insertText.length + 1;
+      } else {
+        after = after.replace(/^[ \t]*,[ \t]*/, ", ");
+        newCaret = before.length + insertText.length + 2;
+      }
+    } else {
+      const needsTrailingSpace = !/^\s/.test(after);
+      const trailingSpace = needsTrailingSpace ? " " : "";
+      insertText = `${leadingSpace}${tagText}${delimiterChar}${trailingSpace}`;
+
+      newCaret = before.length + insertText.length;
+    }
   }
 
   const newValue = `${before}${insertText}${after}`;
@@ -1132,6 +1166,20 @@ async function handleInput(e) {
   } catch (err) {}
 }
 
+function getSuggestionGroups() {
+  const suggestions = state.suggestions;
+  const groups = [];
+  let i = 0;
+  while (i < suggestions.length) {
+    const key = tagGroupKey(suggestions[i].name);
+    let j = i + 1;
+    while (j < suggestions.length && tagGroupKey(suggestions[j].name) === key) j++;
+    groups.push([i, j]);
+    i = j;
+  }
+  return groups;
+}
+
 function handleKeydown(e) {
   try {
     if (!state.wrapper || state.wrapper.classList.contains("is-hidden")) return;
@@ -1144,16 +1192,24 @@ function handleKeydown(e) {
     if (!state.suggestions.length) return;
 
     switch (e.key) {
-      case "ArrowDown":
+      case "ArrowDown": {
         e.preventDefault();
-        state.selectedIndex = (state.selectedIndex + 1) % state.suggestions.length;
+        const groups = getSuggestionGroups();
+        const currentGroupIdx = groups.findIndex(([start, end]) => state.selectedIndex >= start && state.selectedIndex < end);
+        const nextGroupIdx = currentGroupIdx === -1 ? 0 : (currentGroupIdx + 1) % groups.length;
+        state.selectedIndex = groups[nextGroupIdx][0];
         renderResultsSection();
         break;
-      case "ArrowUp":
+      }
+      case "ArrowUp": {
         e.preventDefault();
-        state.selectedIndex = (state.selectedIndex - 1 + state.suggestions.length) % state.suggestions.length;
+        const groups = getSuggestionGroups();
+        const currentGroupIdx = groups.findIndex(([start, end]) => state.selectedIndex >= start && state.selectedIndex < end);
+        const prevGroupIdx = currentGroupIdx === -1 ? groups.length - 1 : (currentGroupIdx - 1 + groups.length) % groups.length;
+        state.selectedIndex = groups[prevGroupIdx][0];
         renderResultsSection();
         break;
+      }
       case "Enter":
       case "Tab":
         if (state.selectedIndex >= 0) {
@@ -1357,7 +1413,7 @@ app.registerExtension({
       name: T.sources.safebooru.name,
       category: ["AnimaTagCompleter", "tags source", "3. Safebooru"],
       type: "boolean",
-      defaultValue: true,
+      defaultValue: false,
       tooltip: T.sources.safebooru.tooltip,
     },
     {
@@ -1385,7 +1441,7 @@ app.registerExtension({
       name: T.showDeprecated.name,
       category: ["AnimaTagCompleter", "AnimaTagCompleter", "4. Show tags from the 'Deprecated' category"],
       type: "boolean",
-      defaultValue: false,
+      defaultValue: true,
     },
     {
       id: "AnimaTagCompleter.ScoreAbbreviation",
@@ -1436,7 +1492,7 @@ app.registerExtension({
       name: T.tagDisplayMode.name,
       category: ["AnimaTagCompleter", "AnimaTagCompleter", "10. Tag display mode"],
       type: "combo",
-      defaultValue: "all",
+      defaultValue: "highest",
       options: [
         { text: T.tagDisplayMode.options.all, value: "all" },
         { text: T.tagDisplayMode.options.highest, value: "highest" },
