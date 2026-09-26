@@ -1,0 +1,225 @@
+.tag-autocomplete-wrapper {
+  position: absolute;
+  z-index: 10000;
+  width: 500px;
+  display: flex !important;
+  flex-direction: column;
+  margin-top: 10px;
+}
+
+.tag-favorites-popup,
+.tag-autocomplete-popup {
+  position: relative;
+  min-height: 50px;
+  max-height: 500px;
+  padding: 10px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.25);
+  font-family: Arial, sans-serif;
+  display: flex !important;
+  flex-direction: column;
+  gap: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: gray transparent;
+  & ~ * {
+    font-size: 14px;
+  }
+}
+
+.tag-favorites-popup::-webkit-scrollbar-track,
+.tag-autocomplete-popup::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tag-favorites-popup::-webkit-scrollbar-thumb,
+.tag-autocomplete-popup::-webkit-scrollbar-thumb {
+  background-color: gray;
+}
+
+.tag-favorites-popup {
+  max-height: 250px;
+}
+
+.tag-autocomplete-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  color: whitesmoke;
+  white-space: nowrap;
+  border: 1px transparent solid;
+  box-sizing: border-box;
+  flex-shrink: 0;
+
+  &:hover {
+    border: 1px gray dashed;
+  }
+  &.selected {
+    border: 1px gray solid;
+  }
+}
+
+.tag-group-cluster {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  flex-direction: row;
+  align-items: stretch;
+  border: 1px transparent solid;
+  box-sizing: border-box;
+
+  &:hover {
+    border: 1px gray dashed;
+  }
+  &.selected {
+    border: 1px gray solid;
+  }
+  & .tag-autocomplete-item {
+    border: unset;
+    &:not(:first-child) {
+      opacity: 0.5 !important;
+    }
+  }
+}
+
+.tag-fuzzy-mark {
+  color: gray;
+}
+
+.tag-favorite-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: whitesmoke;
+  cursor: pointer;
+  font-size: 16px !important;
+  line-height: 1;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+
+  &:hover {
+    opacity: 1;
+  }
+  &.active {
+    color: gold;
+    &:hover {
+      color: gold;
+    }
+  }
+}
+
+.tag-cluster-favorite-btn {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  height: auto;
+}
+.tag-cluster-items {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  & .tag-autocomplete-item {
+    border: 1px transparent solid;
+    border-radius: 0;
+  }
+}
+.tag-favorite-btn-spacer {
+  visibility: hidden;
+  cursor: default;
+}
+
+.tag-autocomplete-name {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.tag-autocomplete-meta {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+
+  .cat {
+    color: gray;
+  }
+  .src {
+    color: white;
+
+    &.custom {
+      color: plum;
+    }
+    &.danbooru {
+      color: #dea267;
+    }
+    &.gelbooru {
+      color: #48a7e3;
+    }
+    &.safebooru {
+      color: #4aca9f;
+    }
+    &.thetacursed {
+      color: #d03d5b;
+    }
+  }
+  .sco {
+    color: pink;
+  }
+}
+
+.tag-autocomplete-highlight {
+  background: transparent;
+  color: greenyellow;
+}
+
+.tag-autocomplete-searching {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  animation: searching 0.25s ease-in 0.5s forwards;
+  & > .search-icon {
+    align-content: center;
+    text-align: center;
+    color: gray;
+    line-height: 1;
+    font-size: 40px;
+    /* step-end отключает плавную анимацию между кадрами */
+    animation: search-anim 1s step-end infinite;
+  }
+}
+
+@keyframes searching {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes search-anim {
+  0% {
+    transform: scaleX(1); /* Пауза в исходном виде (0% - 40%) */
+  }
+  40% {
+    transform: scaleX(-1); /* Мгновенный разворот и пауза (40% - 90%) */
+  }
+  90% {
+    transform: scaleX(1); /* Возврат в исходное состояние перед повтором */
+  }
+}
