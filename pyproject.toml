@@ -1,0 +1,14 @@
+[project]
+name = "animatagcompleter"
+description = "Tag completer for Anima"
+version = "1.0.0"
+license = {file = "LICENSE"}
+
+[project.urls]
+Repository = "https://github.com/Lariany-Yana/AnimaTagCompleter"
+#  Used by Comfy Registry https://registry.comfy.org
+
+[tool.comfy]
+PublisherId = "larianyana"
+DisplayName = "AnimaTagCompleter"
+Icon = ""
