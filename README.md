@@ -99,3 +99,4 @@ For Anima 2b, Gelbooru tags work best. For Anima 2.9b and 3.8b - Danbooru tags.
 | `Gelbooru` | `On`/`Off` Determines whether this source will be used in the search.<br>Default `On` |
 | `Safebooru` | `On`/`Off` Determines whether this source will be used in the search.<br>Default `Off` |
 | `ThetaCursed` | `On`/`Off` Determines whether this source will be used in the search.<br>Default `On` |
+| `Custom tags folder` | Opens the ./tags/Custom folder |
