@@ -111,6 +111,7 @@ const TRANSLATIONS = {
       safebooru: { name: "Safebooru source", tooltip: "Enable/disable tag search from Safebooru" },
       thetacursed: { name: "ThetaCursed source", tooltip: "Enable/disable tag search from ThetaCursed" },
     },
+    openCustom: { name: "Custom tags folder", button: "Open Custom", tooltip: "Opens the ./tags/Custom folder" },
   },
   ru: {
     language: { name: "Язык интерфейса", tooltip: "Для применения нужна перезагрузка страницы", options: { en: "English", ru: "Русский" } },
@@ -147,6 +148,7 @@ const TRANSLATIONS = {
       safebooru: { name: "Safebooru", tooltip: "Включить/отключить поиск тегов из Safebooru" },
       thetacursed: { name: "ThetaCursed", tooltip: "Включить/отключить поиск тегов из ThetaCursed" },
     },
+    openCustom: { name: "Папка Custom", button: "Открыть Custom", tooltip: "Открывает папку ./tags/Custom" },
   },
 };
 
@@ -1423,6 +1425,23 @@ app.registerExtension({
       type: "boolean",
       defaultValue: true,
       tooltip: T.sources.thetacursed.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.OpenCustom",
+      name: T.openCustom.name,
+      category: ["AnimaTagCompleter", "tags source", "5. Open Custom"],
+      tooltip: T.openCustom.tooltip,
+      type: () => {
+        const btn = document.createElement("button");
+        btn.textContent = T.openCustom.button;
+        btn.style.cssText = "padding:4px 12px;cursor:pointer;";
+        btn.addEventListener("click", async () => {
+          try {
+            await api.fetchApi("/anima_tag_completer/open_custom", { method: "POST" });
+          } catch (err) {}
+        });
+        return btn;
+      },
     },
     {
       id: "AnimaTagCompleter.FavoritesDisplayMode",

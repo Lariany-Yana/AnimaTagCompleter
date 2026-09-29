@@ -1,3 +1,6 @@
+import os
+import sys
+import subprocess
 import asyncio
 from aiohttp import web
 
@@ -56,6 +59,31 @@ def setup_routes():
         except Exception as e:
             print(f"[AnimaTagCompleter] list_sources failed: {e}")
             return web.json_response({"error": "list_failed"}, status=500)
+
+    @routes.post("/anima_tag_completer/open_custom")
+    async def open_custom(request: web.Request) -> web.Response:
+        try:
+            base = tag_database.tags_dir
+            os.makedirs(base, exist_ok=True)
+            path = None
+            for d in os.listdir(base):
+                if d.lower() == "custom" and os.path.isdir(os.path.join(base, d)):
+                    path = os.path.join(base, d)
+                    break
+            if path is None:
+                path = os.path.join(base, "Custom")
+                os.makedirs(path, exist_ok=True)
+
+            if sys.platform.startswith("win"):
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as e:
+            print(f"[AnimaTagCompleter] open_custom failed: {e}")
+            return web.json_response({"status": "error", "message": str(e)}, status=500)
+        return web.json_response({"status": "ok"})
 
     @routes.post("/anima_tag_completer/reload")
     async def reload_database(request: web.Request) -> web.Response:
