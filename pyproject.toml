@@ -1,7 +1,7 @@
 [project]
 name = "animatagcompleter"
 description = "Tag completer for Anima"
-version = "1.0.5"
+version = "1.0.6"
 license = {file = "LICENSE"}
 
 [project.urls]
@@ -11,4 +11,5 @@ Repository = "https://github.com/Lariany-Yana/AnimaTagCompleter"
 [tool.comfy]
 PublisherId = "larianyana"
 DisplayName = "AnimaTagCompleter"
-Icon = ""
+Icon = "https://files.catbox.moe/298rb1.webp"
+Banner = "https://files.catbox.moe/405z4n.webp"
