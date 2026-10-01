@@ -27,6 +27,7 @@ def setup_routes():
     async def search_tags(request: web.Request) -> web.Response:
         query = request.rel_url.query.get("q", "")
         limit = _to_int(request.rel_url.query.get("limit"), DEFAULT_LIMIT, MIN_LIMIT, MAX_LIMIT)
+        offset = _to_int(request.rel_url.query.get("offset"), 0, 0)
         sources = _split(request.rel_url.query.get("source") or request.rel_url.query.get("sources"))
         categories = _split(request.rel_url.query.get("category"))
         exclude_categories = _split(request.rel_url.query.get("exclude_category"))
@@ -36,11 +37,12 @@ def setup_routes():
 
         try:
             loop = asyncio.get_running_loop()
-            results = await loop.run_in_executor(
+            results, has_more = await loop.run_in_executor(
                 None,
                 lambda: search_fn(
                     query,
                     limit=limit,
+                    offset=offset,
                     sources=sources,
                     categories=categories,
                     exclude_categories=exclude_categories,
@@ -50,7 +52,11 @@ def setup_routes():
             print(f"[AnimaTagCompleter] Search failed: {e}")
             return web.json_response({"error": "search_failed"}, status=500)
 
-        return web.json_response([e.to_dict() for e in results])
+        return web.json_response({
+            "results": [e.to_dict() for e in results],
+            "has_more": has_more,
+            "next_offset": offset + limit,
+        })
 
     @routes.get("/anima_tag_completer/sources")
     async def list_sources(request: web.Request) -> web.Response:

@@ -206,6 +206,25 @@
   }
 }
 
+.tag-show-more-btn {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border: unset;
+  background: transparent;
+  color: whitesmoke;
+  font-size: 14px;
+  text-transform: uppercase;
+  transition: color 0.3s ease;
+  cursor: pointer;
+
+  &:hover {
+    color: pink;
+  }
+  &:disabled {
+    display: none;
+  }
+}
+
 @keyframes searching {
   0% {
     opacity: 0;

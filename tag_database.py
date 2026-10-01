@@ -7,10 +7,6 @@ import threading
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TAGS_DIR = os.path.join(EXTENSION_DIR, "tags")
 
-CONTAINS_SCAN_MULTIPLIER = 20
-PERMUTED_SCAN_MULTIPLIER = 5
-
-
 class TagEntry:
     __slots__ = ("name", "score", "category", "source", "name_norm", "name_words")
 
@@ -39,6 +35,7 @@ class TagDatabase:
         self._by_name_norm = []
         self._by_name_norm_keys = []
         self._by_category = {}
+        self._by_name_group = {}
         self._lock = threading.Lock()
         self._loaded_at = 0
         self.load()
@@ -52,6 +49,7 @@ class TagDatabase:
                 self._raw_entries = []
                 self._by_name_norm = []
                 self._by_name_norm_keys = []
+                self._by_name_group = {}
                 self._by_category = {}
                 self._loaded_at = time.time()
             return
@@ -79,8 +77,10 @@ class TagDatabase:
         by_name_norm = sorted(final_entries, key=lambda e: e.name_norm)
         by_name_norm_keys = [e.name_norm for e in by_name_norm]
 
+        by_name_group = {}
         by_category = {}
         for e in final_entries:
+            by_name_group.setdefault(e.name_norm, []).append(e)
             by_category.setdefault(e.category.lower(), []).append(e)
 
         with self._lock:
@@ -88,6 +88,7 @@ class TagDatabase:
             self._raw_entries = entries
             self._by_name_norm = by_name_norm
             self._by_name_norm_keys = by_name_norm_keys
+            self._by_name_group = by_name_group
             self._by_category = by_category
             self._loaded_at = time.time()
 
@@ -152,105 +153,124 @@ class TagDatabase:
         return by_name[lo:hi]
 
     @staticmethod
-    def _apply_filters(entries, sources, categories, exclude_categories):
-        if sources:
-            sources_lower = {s.lower() for s in sources}
-            entries = [e for e in entries if e.source.lower() in sources_lower]
-        if categories:
-            categories_lower = {c.lower() for c in categories}
-            entries = [e for e in entries if e.category.lower() in categories_lower]
-        if exclude_categories:
-            exclude_lower = {c.lower() for c in exclude_categories}
-            entries = [e for e in entries if e.category.lower() not in exclude_lower]
-        return entries
+    def _make_filter(sources, categories, exclude_categories):
+        sources_l = {s.lower() for s in sources} if sources else None
+        cats_l = {c.lower() for c in categories} if categories else None
+        excl_l = {c.lower() for c in exclude_categories} if exclude_categories else None
 
-    def search(self, query, limit=20, sources=None,
+        def accept(e):
+            if sources_l and e.source.lower() not in sources_l:
+                return False
+            if cats_l and e.category.lower() not in cats_l:
+                return False
+            if excl_l and e.category.lower() in excl_l:
+                return False
+            return True
+
+        return accept
+
+    @staticmethod
+    def _group_entries(entries):
+        groups = {}
+        for e in entries:
+            groups.setdefault(e.name_norm, []).append(e)
+        result = list(groups.values())
+        for g in result:
+            g.sort(key=lambda e: (0 if (e.source or "").lower() == "thetacursed" else 1, -e.score))
+        return result
+
+    @staticmethod
+    def _paginate(entries, limit, offset):
+        groups = TagDatabase._group_entries(entries)
+        page = groups[offset:offset + limit]
+        has_more = len(groups) > offset + limit
+        return [e for g in page for e in g], has_more
+
+    def search(self, query, limit=20, offset=0, sources=None,
                categories=None, exclude_categories=None):
         query = (query or "").strip()
         if not query and not categories:
-            return []
+            return [], False
+
+        limit = max(1, limit)
+        offset = max(0, offset)
+        target = offset + limit + 1  # +1 уникальный тег, чтобы понять, есть ли продолжение
         query_norm = self._normalize_for_match(query)
+        accept = self._make_filter(sources, categories, exclude_categories)
 
         if not query_norm and categories:
-            candidates = []
             with self._lock:
                 by_category = self._by_category
+            candidates = []
             for cat in {c.lower() for c in categories}:
                 candidates.extend(by_category.get(cat, []))
-            candidates = self._apply_filters(candidates, sources, None, exclude_categories)
+            candidates = [e for e in candidates if accept(e)]
             candidates.sort(key=lambda e: (-e.score, e.name))
-            return self._group_adjacent(candidates)[:limit]
+            return self._paginate(candidates, limit, offset)
 
-        starts_with = self._prefix_candidates(query_norm)
-        starts_with = self._apply_filters(starts_with, sources, categories, exclude_categories)
+        starts_with = [e for e in self._prefix_candidates(query_norm) if accept(e)]
         starts_with.sort(key=lambda e: (-e.score, e.name))
+        groups = self._group_entries(starts_with)
 
-        contains = []
-        if len(starts_with) < limit:
-            need = max(1, (limit - len(starts_with))) * CONTAINS_SCAN_MULTIPLIER
+        if len(groups) < target:
+            seen = {g[0].name_norm for g in groups}
+            need = target - len(groups)
             with self._lock:
                 entries = self._entries
-            
-            sources_lower = {s.lower() for s in sources} if sources else None
+                by_group = self._by_name_group
+
+            found = []
             for e in entries:
-                if sources_lower and e.source.lower() not in sources_lower:
+                n = e.name_norm
+                if n in seen or query_norm not in n or n.startswith(query_norm):
                     continue
-                if query_norm in e.name_norm and not e.name_norm.startswith(query_norm):
-                    contains.append(e)
-                    if len(contains) >= need:
-                        break
-            contains = self._apply_filters(contains, None, categories, exclude_categories)
-            contains.sort(key=lambda e: (-e.score, e.name))
+                if not accept(e):
+                    continue
+                seen.add(n)
+                found.append(n)
+                if len(found) >= need:
+                    break
 
-        combined = starts_with + contains
-        return self._group_adjacent(combined)[:limit]
+            contains_entries = [m for n in found for m in by_group[n] if accept(m)]
+            groups.extend(self._group_entries(contains_entries))
 
-    def search_permuted(self, query, limit=20, sources=None,
-                         categories=None, exclude_categories=None):
+        page = groups[offset:offset + limit]
+        has_more = len(groups) > offset + limit
+        return [e for g in page for e in g], has_more
+
+    def search_permuted(self, query, limit=20, offset=0, sources=None,
+                        categories=None, exclude_categories=None):
         words = [self._normalize_for_match(w) for w in (query or "").split() if w.strip()]
         if len(words) < 2:
-            return []
+            return [], False
+
+        limit = max(1, limit)
+        offset = max(0, offset)
+        target = offset + limit + 1
+        accept = self._make_filter(sources, categories, exclude_categories)
 
         with self._lock:
             entries = self._entries
+            by_group = self._by_name_group
 
-        entries = self._apply_filters(entries, sources, categories, exclude_categories)
-
-        matched = []
-        target = max(1, limit) * PERMUTED_SCAN_MULTIPLIER
-
+        seen = set()
+        names = []
         for e in entries:
-            if len(e.name_words) < len(words):
+            n = e.name_norm
+            if n in seen or len(e.name_words) < len(words):
                 continue
-            
-            if not all(w in e.name_norm for w in words):
+            if not accept(e):
                 continue
-
+            if not all(w in n for w in words):
+                continue
             if self._words_match_permuted(words, e.name_words):
-                matched.append(e)
-                if len(matched) >= target:
+                seen.add(n)
+                names.append(n)
+                if len(names) >= target:
                     break
 
-        matched.sort(key=lambda e: (-e.score, e.name))
-        return self._group_adjacent(matched)[:limit]
-
-    @staticmethod
-    def _group_adjacent(entries):
-        groups = {}
-        order = []
-        for e in entries:
-            key = e.name_norm
-            if key not in groups:
-                groups[key] = []
-                order.append(key)
-            groups[key].append(e)
-
-        result = []
-        for key in order:
-            group = groups[key]
-            group.sort(key=lambda e: (0 if (e.source or "").lower() == "thetacursed" else 1, -e.score))
-            result.extend(group)
-        return result
+        matched = [m for n in names for m in by_group[n] if accept(m)]
+        return self._paginate(matched, limit, offset)
 
     @staticmethod
     def _words_match_permuted(query_words, name_words):

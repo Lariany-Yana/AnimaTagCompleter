@@ -16,6 +16,7 @@ const state = {
   requestId: 0,
   lastQuery: "",
   customCategories: new Set(),
+  pagination: null,
 };
 
 async function loadCustomCategories() {
@@ -67,7 +68,7 @@ function getSettings() {
     favoritesDisplayMode: get("AnimaTagCompleter.FavoritesDisplayMode", "trigger"),
     tagDisplayMode: get("AnimaTagCompleter.TagDisplayMode", "all"),
     minChars: Number(get("AnimaTagCompleter.MinChars", 2)),
-    maxSuggestions: Number(get("AnimaTagCompleter.MaxSuggestions", 20)),
+    maxSuggestions: Number(get("AnimaTagCompleter.MaxSuggestions", 30)),
     delimiter: get("AnimaTagCompleter.Delimiter", ","),
     artistPrefix: get("AnimaTagCompleter.ArtistPrefix", "@"),
     showDeprecated: get("AnimaTagCompleter.ShowDeprecated", false),
@@ -112,6 +113,7 @@ const TRANSLATIONS = {
       thetacursed: { name: "ThetaCursed source", tooltip: "Enable/disable tag search from ThetaCursed" },
     },
     openCustom: { name: "Custom tags folder", button: "Open Custom", tooltip: "Opens the ./tags/Custom folder" },
+    showMore: "Show more",
   },
   ru: {
     language: { name: "Язык интерфейса", tooltip: "Для применения нужна перезагрузка страницы", options: { en: "English", ru: "Русский" } },
@@ -149,6 +151,7 @@ const TRANSLATIONS = {
       thetacursed: { name: "ThetaCursed", tooltip: "Включить/отключить поиск тегов из ThetaCursed" },
     },
     openCustom: { name: "Папка Custom", button: "Открыть Custom", tooltip: "Открывает папку ./tags/Custom" },
+    showMore: "Показать ещё",
   },
 };
 
@@ -659,9 +662,10 @@ function createTagItemElement(tag, { highlightQuery = "", selected = false, onSe
   return item;
 }
 
-function renderResultsSection() {
+function renderResultsSection({ keepScroll = false } = {}) {
   ensurePopup();
   const resultsEl = state.resultsEl;
+  const prevScroll = resultsEl.scrollTop;
   resultsEl.innerHTML = "";
 
   if (!state.suggestions.length) {
@@ -749,8 +753,22 @@ function renderResultsSection() {
     i = j;
   }
 
+  if (state.pagination?.hasMore) {
+    const moreBtn = document.createElement("button");
+    moreBtn.type = "button";
+    moreBtn.className = "tag-show-more-btn";
+    moreBtn.textContent = state.pagination.loading ? "…" : T.showMore;
+    moreBtn.disabled = !!state.pagination.loading;
+    moreBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      loadMoreSuggestions();
+    });
+    resultsEl.appendChild(moreBtn);
+  }
+
   setDisplay(resultsEl, "flex");
-  resultsEl.scrollTop = 0;
+  resultsEl.scrollTop = keepScroll ? prevScroll : 0;
 }
 
 function renderFavoritesSection(filterText = "") {
@@ -1011,12 +1029,30 @@ function setElementValue(el, value, caret) {
   el.focus();
 }
 
-async function fetchSuggestions(parsed, settings, queryOverride, signal, permuted = false) {
+function countUniqueTags(tags) {
+  return new Set(tags.map((t) => tagGroupKey(t.name))).size;
+}
+
+function appendUniqueTags(base, incoming, markFuzzy = false) {
+  const seen = new Set(base.map(tagResultKey));
+  const result = base.slice();
+  for (const tag of incoming) {
+    const key = tagResultKey(tag);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(markFuzzy ? { ...tag, __fuzzy: true } : tag);
+  }
+  return result;
+}
+
+async function fetchSuggestions(parsed, settings, signal, { offset = 0, permuted = false } = {}) {
+  const empty = { results: [], hasMore: false, nextOffset: offset };
   try {
     const params = new URLSearchParams({
-      q: queryOverride ?? parsed.query,
+      q: parsed.query,
       limit: String(settings.maxSuggestions),
     });
+    if (offset > 0) params.set("offset", String(offset));
 
     const activeSources = getActiveSources();
     if (activeSources.length > 0) {
@@ -1030,12 +1066,17 @@ async function fetchSuggestions(parsed, settings, queryOverride, signal, permute
     }
     if (permuted) params.set("permuted", "1");
     const res = await api.fetchApi(`/anima_tag_completer/search?${params.toString()}`, { signal });
-    if (!res.ok) return [];
-    return await res.json();
+    if (!res.ok) return empty;
+    const data = await res.json();
+    return {
+      results: Array.isArray(data.results) ? data.results : [],
+      hasMore: !!data.has_more,
+      nextOffset: Number(data.next_offset) || offset,
+    };
   } catch (e) {
-    if (e.name === "AbortError") return [];
+    if (e.name === "AbortError") return empty;
     console.error("[AnimaTagCompleter]", e);
-    return [];
+    return empty;
   }
 }
 
@@ -1075,23 +1116,56 @@ async function fetchSuggestionsWithFallback(parsed, settings, signal) {
   const wordCount = parsed.query.trim().split(/\s+/).filter(Boolean).length;
 
   if (wordCount < 2) {
-    return fetchSuggestions(parsed, settings, undefined, signal);
+    const primary = await fetchSuggestions(parsed, settings, signal);
+    return { suggestions: primary.results, hasMore: primary.hasMore, nextOffset: primary.nextOffset, mode: "primary" };
   }
 
-  const [primary, fuzzy] = await Promise.all([fetchSuggestions(parsed, settings, undefined, signal), fetchSuggestions(parsed, settings, undefined, signal, true)]);
+  const [primary, fuzzy] = await Promise.all([fetchSuggestions(parsed, settings, signal), fetchSuggestions(parsed, settings, signal, { permuted: true })]);
 
-  if (signal?.aborted) return primary;
-  if (primary.length > FUZZY_TRIGGER_MAX) return primary;
-
-  const seen = new Set(primary.map(tagResultKey));
-  const merged = primary.slice();
-  for (const tag of fuzzy) {
-    const key = tagResultKey(tag);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push({ ...tag, __fuzzy: true });
+  if (signal?.aborted || primary.hasMore || countUniqueTags(primary.results) > FUZZY_TRIGGER_MAX) {
+    return { suggestions: primary.results, hasMore: primary.hasMore, nextOffset: primary.nextOffset, mode: "primary" };
   }
-  return merged.slice(0, settings.maxSuggestions);
+
+  return {
+    suggestions: appendUniqueTags(primary.results, fuzzy.results, true),
+    hasMore: fuzzy.hasMore,
+    nextOffset: fuzzy.nextOffset,
+    mode: "fuzzy",
+  };
+}
+
+async function loadMoreSuggestions() {
+  const pg = state.pagination;
+  const el = state.activeElement;
+  if (!pg || !pg.hasMore || pg.loading || !el || !state.suggestions.length) return;
+
+  pg.loading = true;
+  renderResultsSection({ keepScroll: true });
+
+  if (state.abortController) state.abortController.abort();
+  state.abortController = new AbortController();
+  const signal = state.abortController.signal;
+  const requestId = state.requestId;
+  const settings = getSettings();
+
+  try {
+    const page = await fetchSuggestions(pg.parsed, settings, signal, {
+      offset: pg.offset,
+      permuted: pg.mode === "fuzzy",
+    });
+
+    if (signal.aborted || state.pagination !== pg || requestId !== state.requestId || !state.suggestions.length) return;
+
+    const combined = appendUniqueTags(state.suggestions, page.results, pg.mode === "fuzzy");
+    state.suggestions = settings.tagDisplayMode === "highest" ? reduceToHighestScore(combined) : combined;
+    pg.offset = page.nextOffset;
+    pg.hasMore = page.hasMore;
+  } finally {
+    if (state.pagination === pg) pg.loading = false;
+  }
+
+  renderResultsSection({ keepScroll: true });
+  updatePopupVisibility(el, getCurrentFragment(el).fullStart);
 }
 
 let inputTimer = null;
@@ -1116,6 +1190,7 @@ async function handleInput(e) {
       }
 
       const requestId = ++state.requestId;
+      state.pagination = null;
 
       const favTrigger = settings.favoritesDisplayMode === "trigger" ? parseFavoritesTrigger(fragment) : null;
       if (favTrigger) {
@@ -1149,14 +1224,21 @@ async function handleInput(e) {
       showSearchOverlay();
 
       try {
-        const suggestions = await fetchSuggestionsWithFallback(parsed, settings, signal);
+        const result = await fetchSuggestionsWithFallback(parsed, settings, signal);
 
         if (signal.aborted || state.activeElement !== el || requestId !== state.requestId) return;
 
         const { fullStart: currentStart } = getCurrentFragment(el);
 
         state.lastQuery = parsed.query;
-        showSuggestions(el, currentStart, settings.tagDisplayMode === "highest" ? reduceToHighestScore(suggestions) : suggestions);
+        state.pagination = {
+          parsed,
+          mode: result.mode,
+          offset: result.nextOffset,
+          hasMore: result.hasMore,
+          loading: false,
+        };
+        showSuggestions(el, currentStart, settings.tagDisplayMode === "highest" ? reduceToHighestScore(result.suggestions) : result.suggestions);
       } catch (err) {
         console.error("[AnimaTagCompleter]", err);
       } finally {
