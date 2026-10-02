@@ -44,7 +44,7 @@ function getActiveSources() {
   };
 
   const sources = ["custom"];
-  const toggleable = ["Danbooru", "Gelbooru", "Safebooru", "ThetaCursed"];
+  const toggleable = ["Danbooru", "Gelbooru", "Safebooru", "E621", "ThetaCursed"];
   for (const src of toggleable) {
     if (get(`AnimaTagCompleter.Source.${src}`, true)) {
       sources.push(src.toLowerCase());
@@ -79,16 +79,16 @@ function getSettings() {
 const TRANSLATIONS = {
   en: {
     language: { name: "Interface language", tooltip: "Requires a page reload to take effect", options: { en: "English", ru: "Русский" } },
-    enable: { name: "Enable extension", tooltip: "On/Off TagCompleter" },
+    enable: { name: "Enable extension", tooltip: "Enable/disable AnimaTagCompleter" },
     favMode: {
       name: "How to show favorite tags",
       tooltip: "Choose how favorite tags are shown: by typing '--fav', or automatically when you focus the text field",
-      options: { trigger: "Type --fav", focus: "On input focus" },
+      options: { trigger: "Type --fav", focus: "Click on input" },
     },
     showDeprecated: { name: "Show tags from the Deprecated category" },
     scoreAbbr: {
       name: "Enable score abbreviation (K/M/B)",
-      tooltip: "On/Off Number Abbreviation\n\n1234 > 1.2K\n12345 > 12.3K\n9988888 > 9.9M",
+      tooltip: "Enable/disable Number Abbreviation\n\n1234 > 1.2K\n12345 > 12.3K\n9988888 > 9.9M",
     },
     minChars: {
       name: "Minimum characters to trigger search",
@@ -97,7 +97,7 @@ const TRANSLATIONS = {
     maxSuggestions: { name: "Maximum number of suggestions" },
     delimiter: {
       name: "Delimiter",
-      tooltip: "A space is always inserted after the tag, the delimiter is inserted before this space",
+      tooltip: "A space is always inserted after the tag; the separator is inserted before this space",
       options: { comma: ", (comma)", period: ". (period)", none: "None" },
     },
     artistPrefix: { name: "Prefix before Artist category tags", tooltip: "@ is standard for Anima" },
@@ -110,6 +110,7 @@ const TRANSLATIONS = {
       danbooru: { name: "Danbooru source", tooltip: "Enable/disable tag search from Danbooru" },
       gelbooru: { name: "Gelbooru source", tooltip: "Enable/disable tag search from Gelbooru" },
       safebooru: { name: "Safebooru source", tooltip: "Enable/disable tag search from Safebooru" },
+      e621: { name: "E621 source", tooltip: "Enable/disable tag search from E621" },
       thetacursed: { name: "ThetaCursed source", tooltip: "Enable/disable tag search from ThetaCursed" },
     },
     openCustom: { name: "Custom tags folder", button: "Open Custom", tooltip: "Opens the ./tags/Custom folder" },
@@ -117,28 +118,28 @@ const TRANSLATIONS = {
   },
   ru: {
     language: { name: "Язык интерфейса", tooltip: "Для применения нужна перезагрузка страницы", options: { en: "English", ru: "Русский" } },
-    enable: { name: "Включить расширение", tooltip: "Вкл/выкл TagCompleter" },
+    enable: { name: "Включить расширение", tooltip: "Включает/выключает AnimaTagCompleter" },
     favMode: {
       name: "Как показывать избранные теги",
-      tooltip: "Выберите способ показа избранных тегов: по вводу '--fav' или автоматически при клике на текстовое поле",
+      tooltip: "Выберите способ показа избранных тегов: при вводе '--fav' или автоматически по клику на текстовое поле",
       options: { trigger: "Ввод --fav", focus: "Клик на input" },
     },
     showDeprecated: { name: "Показывать теги из категории Deprecated" },
     scoreAbbr: {
       name: "Сокращать score (K/M/B)",
-      tooltip: "Вкл/выкл сокращение чисел\n\n1234 > 1.2K\n12345 > 12.3K\n9988888 > 9.9M",
+      tooltip: "Включает/выключает сокращение чисел\n\n1234 > 1.2K\n12345 > 12.3K\n9988888 > 9.9M",
     },
     minChars: {
       name: "Минимум символов для запуска поиска",
-      tooltip: "Не применяется при фильтре --category, такие результаты показываются сразу.",
+      tooltip: "Не применяется при фильтре --category, такие результаты показываются сразу",
     },
-    maxSuggestions: { name: "Максимум найденных тегов" },
+    maxSuggestions: { name: "Максимум подсказок тегов" },
     delimiter: {
       name: "Разделитель",
-      tooltip: "Пробел вставляется всегда, разделитель вставляется перед этим пробелом.",
+      tooltip: "Пробел после тега вставляется всегда, разделитель вставляется перед этим пробелом",
       options: { comma: ", (запятая)", period: ". (точка)", none: "Нет" },
     },
-    artistPrefix: { name: "Префикс перед тегами категории Artist", tooltip: "@ — стандарт для Anima." },
+    artistPrefix: { name: "Префикс перед тегами категории Artist", tooltip: "@ — стандарт для Anima" },
     tagDisplayMode: {
       name: "Режим отображения тегов",
       tooltip: "«Все совпадения» выводит каждый результат, включая дубликаты из разных источников. «Высший score» отображает только тег с максимальным score.",
@@ -148,6 +149,7 @@ const TRANSLATIONS = {
       danbooru: { name: "Danbooru", tooltip: "Включить/отключить поиск тегов из Danbooru" },
       gelbooru: { name: "Gelbooru", tooltip: "Включить/отключить поиск тегов из Gelbooru" },
       safebooru: { name: "Safebooru", tooltip: "Включить/отключить поиск тегов из Safebooru" },
+      e621: { name: "E621", tooltip: "Включить/отключить поиск тегов из E621" },
       thetacursed: { name: "ThetaCursed", tooltip: "Включить/отключить поиск тегов из ThetaCursed" },
     },
     openCustom: { name: "Папка Custom", button: "Открыть Custom", tooltip: "Открывает папку ./tags/Custom" },
@@ -1404,7 +1406,6 @@ function showSearchOverlay(target) {
 
       const icon = document.createElement("div");
       icon.className = "search-icon";
-      icon.textContent = "👀";
 
       overlay.appendChild(icon);
       popup.appendChild(overlay);
@@ -1477,41 +1478,9 @@ app.registerExtension({
       tooltip: T.enable.tooltip,
     },
     {
-      id: "AnimaTagCompleter.Source.Danbooru",
-      name: T.sources.danbooru.name,
-      category: ["AnimaTagCompleter", "tags source", "1. Danbooru"],
-      type: "boolean",
-      defaultValue: true,
-      tooltip: T.sources.danbooru.tooltip,
-    },
-    {
-      id: "AnimaTagCompleter.Source.Gelbooru",
-      name: T.sources.gelbooru.name,
-      category: ["AnimaTagCompleter", "tags source", "2. Gelbooru"],
-      type: "boolean",
-      defaultValue: true,
-      tooltip: T.sources.gelbooru.tooltip,
-    },
-    {
-      id: "AnimaTagCompleter.Source.Safebooru",
-      name: T.sources.safebooru.name,
-      category: ["AnimaTagCompleter", "tags source", "3. Safebooru"],
-      type: "boolean",
-      defaultValue: false,
-      tooltip: T.sources.safebooru.tooltip,
-    },
-    {
-      id: "AnimaTagCompleter.Source.ThetaCursed",
-      name: T.sources.thetacursed.name,
-      category: ["AnimaTagCompleter", "tags source", "4. ThetaCursed"],
-      type: "boolean",
-      defaultValue: true,
-      tooltip: T.sources.thetacursed.tooltip,
-    },
-    {
       id: "AnimaTagCompleter.OpenCustom",
       name: T.openCustom.name,
-      category: ["AnimaTagCompleter", "tags source", "5. Open Custom"],
+      category: ["AnimaTagCompleter", "tags source", "1. Open Custom"],
       tooltip: T.openCustom.tooltip,
       type: () => {
         const btn = document.createElement("button");
@@ -1524,6 +1493,46 @@ app.registerExtension({
         });
         return btn;
       },
+    },
+    {
+      id: "AnimaTagCompleter.Source.Danbooru",
+      name: T.sources.danbooru.name,
+      category: ["AnimaTagCompleter", "tags source", "2. Danbooru"],
+      type: "boolean",
+      defaultValue: true,
+      tooltip: T.sources.danbooru.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.Source.Gelbooru",
+      name: T.sources.gelbooru.name,
+      category: ["AnimaTagCompleter", "tags source", "3. Gelbooru"],
+      type: "boolean",
+      defaultValue: true,
+      tooltip: T.sources.gelbooru.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.Source.Safebooru",
+      name: T.sources.safebooru.name,
+      category: ["AnimaTagCompleter", "tags source", "4. Safebooru"],
+      type: "boolean",
+      defaultValue: false,
+      tooltip: T.sources.safebooru.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.Source.E621",
+      name: T.sources.e621.name,
+      category: ["AnimaTagCompleter", "tags source", "5. E621"],
+      type: "boolean",
+      defaultValue: false,
+      tooltip: T.sources.e621.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.Source.ThetaCursed",
+      name: T.sources.thetacursed.name,
+      category: ["AnimaTagCompleter", "tags source", "6. ThetaCursed"],
+      type: "boolean",
+      defaultValue: true,
+      tooltip: T.sources.thetacursed.tooltip,
     },
     {
       id: "AnimaTagCompleter.FavoritesDisplayMode",
@@ -1570,7 +1579,7 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.Delimiter",
       name: T.delimiter.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "8. Delimiter type"],
+      category: ["AnimaTagCompleter", "AnimaTagCompleter", "8. Separator type"],
       type: "combo",
       defaultValue: ",",
       options: [

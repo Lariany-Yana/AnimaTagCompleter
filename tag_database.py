@@ -7,16 +7,25 @@ import threading
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TAGS_DIR = os.path.join(EXTENSION_DIR, "tags")
 
+_NORM_TABLE = str.maketrans({"_": " ", "(": None, ")": None})
+
 class TagEntry:
-    __slots__ = ("name", "score", "category", "source", "name_norm", "name_words")
+    __slots__ = ("name", "score", "category", "source", "name_norm", "_words")
 
     def __init__(self, name, score, category, source):
         self.name = name
         self.score = max(0.0, score)
         self.category = category
         self.source = source
-        self.name_norm = TagDatabase._normalize_for_match(name)
-        self.name_words = self.name_norm.split()
+        self.name_norm = name.translate(_NORM_TABLE).strip().lower()
+        self._words = None
+
+    @property
+    def name_words(self):
+        w = self._words
+        if w is None:
+            w = self._words = self.name_norm.split()
+        return w
 
     def to_dict(self):
         return {
@@ -31,31 +40,63 @@ class TagDatabase:
     def __init__(self, tags_dir=None):
         self.tags_dir = tags_dir or DEFAULT_TAGS_DIR
         self._entries = []
-        self._raw_entries = []
+        self._sources_tree = {}
         self._by_name_norm = []
         self._by_name_norm_keys = []
         self._by_category = {}
         self._by_name_group = {}
+        self._file_cache = {}
         self._lock = threading.Lock()
+        self._load_lock = threading.Lock()
+        self._ready = threading.Event()
         self._loaded_at = 0
-        self.load()
+
+    def load_async(self):
+        threading.Thread(target=self.load, name="AnimaTagLoader", daemon=True).start()
 
     def load(self):
-        entries = []
+        with self._load_lock:
+            self._load_impl()
+
+    def reload(self):
+        self.load()
+
+    def _get_file_entries(self, file_path, category, source):
+        try:
+            st = os.stat(file_path)
+        except OSError:
+            return []
+        sig = (st.st_mtime_ns, st.st_size)
+        cached = self._file_cache.get(file_path)
+        if cached and cached[0] == sig:
+            return cached[1]
+        parsed = self._parse_csv(file_path, category, source)
+        self._file_cache[file_path] = (sig, parsed)
+        return parsed
+
+    def _load_impl(self):
         if not os.path.isdir(self.tags_dir):
             print(f"[AnimaTagCompleter] Tags directory not found: {self.tags_dir}")
             with self._lock:
                 self._entries = []
-                self._raw_entries = []
+                self._sources_tree = {}
                 self._by_name_norm = []
                 self._by_name_norm_keys = []
                 self._by_name_group = {}
                 self._by_category = {}
                 self._loaded_at = time.time()
+            self._file_cache.clear()
+            self._ready.set()
             return
+
+        t0 = time.time()
+        entries = []
+        tree = {}
+        seen_paths = set()
 
         for source in self._list_subdirs(self.tags_dir):
             source_path = os.path.join(self.tags_dir, source)
+            tree.setdefault(source, set())
             csv_files = sorted(
                 f for f in os.listdir(source_path) if f.lower().endswith(".csv")
             )
@@ -63,7 +104,15 @@ class TagDatabase:
             for filename in csv_files:
                 category = os.path.splitext(filename)[0]
                 file_path = os.path.join(source_path, filename)
-                entries.extend(self._parse_csv(file_path, category, source))
+                seen_paths.add(file_path)
+                parsed = self._get_file_entries(file_path, category, source)
+                if parsed:
+                    tree[source].add(category)
+                    entries.extend(parsed)
+
+        for p in list(self._file_cache):
+            if p not in seen_paths:
+                del self._file_cache[p]
 
         deduped = {}
         for e in entries:
@@ -85,20 +134,19 @@ class TagDatabase:
 
         with self._lock:
             self._entries = final_entries
-            self._raw_entries = entries
+            self._sources_tree = {s: sorted(c) for s, c in tree.items()}
             self._by_name_norm = by_name_norm
             self._by_name_norm_keys = by_name_norm_keys
             self._by_name_group = by_name_group
             self._by_category = by_category
             self._loaded_at = time.time()
 
+        self._ready.set()
         print(
             f"[AnimaTagCompleter] Tags loaded: {len(entries)} "
-            f"(after exact-duplicate removal: {len(final_entries)}) from {self.tags_dir}"
+            f"(after exact-duplicate removal: {len(final_entries)}) "
+            f"in {time.time() - t0:.2f}s from {self.tags_dir}"
         )
-
-    def reload(self):
-        self.load()
 
     @staticmethod
     def _list_subdirs(path):
@@ -139,8 +187,6 @@ class TagDatabase:
             return float(raw_value)
         except ValueError:
             return 0.0
-
-    # ---------- Поиск ----------
 
     def _prefix_candidates(self, query_norm):
         with self._lock:
@@ -188,13 +234,14 @@ class TagDatabase:
 
     def search(self, query, limit=20, offset=0, sources=None,
                categories=None, exclude_categories=None):
+        self._ready.wait(30)
         query = (query or "").strip()
         if not query and not categories:
             return [], False
 
         limit = max(1, limit)
         offset = max(0, offset)
-        target = offset + limit + 1  # +1 уникальный тег, чтобы понять, есть ли продолжение
+        target = offset + limit + 1
         query_norm = self._normalize_for_match(query)
         accept = self._make_filter(sources, categories, exclude_categories)
 
@@ -240,6 +287,7 @@ class TagDatabase:
 
     def search_permuted(self, query, limit=20, offset=0, sources=None,
                         categories=None, exclude_categories=None):
+        self._ready.wait(30)
         words = [self._normalize_for_match(w) for w in (query or "").split() if w.strip()]
         if len(words) < 2:
             return [], False
@@ -293,21 +341,11 @@ class TagDatabase:
 
     @staticmethod
     def _normalize_for_match(s):
-        return s.replace("_", " ").replace("(", "").replace(")", "").strip().lower()
+        return s.translate(_NORM_TABLE).strip().lower()
 
     def list_sources(self):
         with self._lock:
-            entries = self._raw_entries
-        tree = {}
-        for e in entries:
-            cats = tree.setdefault(e.source, set())
-            cats.add(e.category)
-
-        for source in self._list_subdirs(self.tags_dir):
-            if source not in tree:
-                tree[source] = set()
-
-        return {source: sorted(cats) for source, cats in tree.items()}
+            return {s: list(c) for s, c in self._sources_tree.items()}
 
     @property
     def size(self):
@@ -316,3 +354,4 @@ class TagDatabase:
 
 
 tag_database = TagDatabase()
+tag_database.load_async()

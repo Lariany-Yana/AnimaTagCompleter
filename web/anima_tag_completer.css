@@ -156,32 +156,49 @@
     color: gray;
   }
   .src {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
     color: white;
+    gap: 2px;
+    &::before {
+      content: "";
+      display: block;
+      height: 1rem;
+      width: 1rem;
+      border-radius: 20%;
+      background-size: contain;
+      background-position: center;
+    }
 
-    &.custom {
-      color: plum;
+    &.custom::before {
+      background-image: url("./ico/Custom.ico");
     }
-    &.danbooru {
-      color: #dea267;
+    &.danbooru::before {
+      background-image: url("./ico/Danbooru.ico");
     }
-    &.gelbooru {
-      color: #48a7e3;
+    &.gelbooru::before {
+      background-image: url("./ico/Gelbooru.ico");
     }
-    &.safebooru {
-      color: #4aca9f;
+    &.safebooru::before {
+      background-image: url("./ico/Safebooru.ico");
     }
-    &.thetacursed {
-      color: #d03d5b;
+    &.thetacursed::before {
+      background-image: url("./ico/ThetaCursed.ico");
+    }
+    &.e621::before {
+      background-image: url("./ico/E621.ico");
     }
   }
   .sco {
-    color: pink;
+    color: greenyellow;
   }
 }
 
 .tag-autocomplete-highlight {
   background: transparent;
-  color: greenyellow;
+  color: pink;
 }
 
 .tag-autocomplete-searching {
@@ -197,12 +214,14 @@
   opacity: 0;
   animation: searching 0.25s ease-in 0.5s forwards;
   & > .search-icon {
-    align-content: center;
-    text-align: center;
     color: gray;
     line-height: 1;
-    font-size: 40px;
+    height: 40px;
+    width: 40px;
     animation: search-anim 1s step-end infinite;
+    background-image: url("./emoji_u1f440.svg");
+    background-position: center;
+    background-size: contain;
   }
 }
 

@@ -101,7 +101,7 @@ def setup_routes():
             return web.json_response({"status": "error", "message": str(e)}, status=500)
         return web.json_response({"status": "ok", "size": tag_database.size})
 
-    print(f"[AnimaTagCompleter] API routes registered, tags in database: {tag_database.size}")
+    print("[AnimaTagCompleter] API routes registered")
 
 
 def _split(value):
