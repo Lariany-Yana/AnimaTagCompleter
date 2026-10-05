@@ -73,6 +73,7 @@ function getSettings() {
     artistPrefix: get("AnimaTagCompleter.ArtistPrefix", "@"),
     showDeprecated: get("AnimaTagCompleter.ShowDeprecated", false),
     scoreAbbreviation: get("AnimaTagCompleter.ScoreAbbreviation", true),
+    showPreview: get("AnimaTagCompleter.ShowPreview", true),
   };
 }
 
@@ -107,14 +108,22 @@ const TRANSLATIONS = {
       options: { all: "All matches", highest: "Highest score" },
     },
     sources: {
-      danbooru: { name: "Danbooru source", tooltip: "Enable/disable tag search from Danbooru" },
-      gelbooru: { name: "Gelbooru source", tooltip: "Enable/disable tag search from Gelbooru" },
-      safebooru: { name: "Safebooru source", tooltip: "Enable/disable tag search from Safebooru" },
-      e621: { name: "E621 source", tooltip: "Enable/disable tag search from E621" },
-      thetacursed: { name: "ThetaCursed source", tooltip: "Enable/disable tag search from ThetaCursed" },
+      danbooru: { name: "Danbooru", tooltip: "Enable/disable tag search from Danbooru" },
+      gelbooru: { name: "Gelbooru", tooltip: "Enable/disable tag search from Gelbooru" },
+      safebooru: { name: "Safebooru", tooltip: "Enable/disable tag search from Safebooru" },
+      e621: { name: "E621", tooltip: "Enable/disable tag search from E621" },
+      thetacursed: { name: "ThetaCursed", tooltip: "Enable/disable tag search from ThetaCursed" },
     },
-    openCustom: { name: "Custom tags folder", button: "Open Custom", tooltip: "Opens the ./tags/Custom folder" },
+    openCustom: { name: "Custom tags", button: "Open folder", tooltip: "Opens the 'AnimaTagCompleter/tags/Custom' folder" },
     showMore: "Show more",
+    mainGroup: "1. Main settings",
+    customGroup: "2. Customization",
+    sourcesGroup: "3. Tag sources",
+    popupWidth: { name: "Popup width (px)", tooltip: "Shared for suggestions and favorites" },
+    favMaxHeight: { name: "Favorites popup max height (px)" },
+    sugMaxHeight: { name: "Suggestions popup max height (px)" },
+    previewSize: { name: "Preview image max width (px)", tooltip: "The maximum height is specified by the Suggestions popup max height." },
+    showPreview: { name: "Show tag preview images", tooltip: "Enable/disable image previews on tag hover" },
   },
   ru: {
     language: { name: "Язык интерфейса", tooltip: "Для применения нужна перезагрузка страницы", options: { en: "English", ru: "Русский" } },
@@ -152,8 +161,16 @@ const TRANSLATIONS = {
       e621: { name: "E621", tooltip: "Включить/отключить поиск тегов из E621" },
       thetacursed: { name: "ThetaCursed", tooltip: "Включить/отключить поиск тегов из ThetaCursed" },
     },
-    openCustom: { name: "Папка Custom", button: "Открыть Custom", tooltip: "Открывает папку ./tags/Custom" },
+    openCustom: { name: "Пользовательские теги", button: "Открыть папку Custom", tooltip: "Открывает папку './tags/Custom'" },
     showMore: "Показать ещё",
+    mainGroup: "1. Основные настройки",
+    customGroup: "2. Кастомизация",
+    sourcesGroup: "3. Источники тегов",
+    popupWidth: { name: "Ширина окна подсказок (px)", tooltip: "Общая для подсказок и избранного" },
+    favMaxHeight: { name: "Максимальная высота окна избранного (px)" },
+    sugMaxHeight: { name: "Максимальная высота окна подсказок (px)" },
+    previewSize: { name: "Максимальная ширина превью тега (px)", tooltip: "Максимальная высота задаётся параметром Максимальная высота окна подсказок." },
+    showPreview: { name: "Показывать превью тегов", tooltip: "Включает/выключает показ картинок-превью при наведении на тег" },
   },
 };
 
@@ -492,6 +509,7 @@ function toggleFavorite(tag) {
       category: tag.category,
       source: tag.source,
       score: tag.score,
+      preview: tag.preview,
     });
   } else {
     state.favorites.splice(idx, 1);
@@ -555,13 +573,35 @@ function ensurePopup() {
   setDisplay(resultsEl, "none");
 
   wrapper.appendChild(favoritesEl);
+  const previewEl = document.createElement("img");
+  previewEl.className = "tag-image-preview";
+  previewEl.alt = "";
+  previewEl.referrerPolicy = "no-referrer";
+  previewEl.addEventListener("error", () => previewEl.removeAttribute("src"));
+
+  wrapper.appendChild(previewEl);
+  wrapper.appendChild(favoritesEl);
   wrapper.appendChild(resultsEl);
   document.body.appendChild(wrapper);
 
   state.wrapper = wrapper;
+  state.previewEl = previewEl;
   state.favoritesEl = favoritesEl;
   state.resultsEl = resultsEl;
+  state.resultsEl = resultsEl;
   return wrapper;
+}
+
+function setPreview(tag) {
+  const img = state.previewEl;
+  if (!img) return;
+  const p = tag?.preview ? String(tag.preview).trim() : "";
+  if (!p || !getSettings().showPreview) {
+    img.removeAttribute("src");
+    return;
+  }
+  const url = /^https?:\/\//i.test(p) ? p : api.apiURL(`/anima_tag_completer/preview/${p.split("/").map(encodeURIComponent).join("/")}`);
+  if (img.getAttribute("src") !== url) img.src = url;
 }
 
 function createTagItemElement(tag, { highlightQuery = "", selected = false, onSelect, showFavoriteButton = true, favoriteTarget = null, hideSpacer = false, favoriteActive = null, onToggleFavorite = null } = {}) {
@@ -655,6 +695,8 @@ function createTagItemElement(tag, { highlightQuery = "", selected = false, onSe
 
   item.appendChild(nameEl);
   item.appendChild(metaEl);
+
+  item.addEventListener("mouseenter", () => setPreview(tag));
 
   item.addEventListener("mousedown", (e) => {
     e.preventDefault();
@@ -1453,6 +1495,75 @@ function detachListeners() {
   listenersAttached = false;
 }
 
+const POPUP_SIZE_VARS = {
+  "AnimaTagCompleter.PopupWidth": ["--tag-autocomplete-wrapper-width", 500],
+  "AnimaTagCompleter.FavoritesMaxHeight": ["--tag-favorites-popup-max-height", 250],
+  "AnimaTagCompleter.SuggestionsMaxHeight": ["--tag-autocomplete-popup-max-height", 500],
+  "AnimaTagCompleter.PreviewSize": ["--tag-image-preview-size", 250],
+};
+
+function applyPopupSize(id, value) {
+  const [cssVar, fallback] = POPUP_SIZE_VARS[id];
+  const n = Number(value);
+  document.documentElement.style.setProperty(cssVar, `${Number.isFinite(n) && n > 0 ? n : fallback}px`);
+  if (state.wrapper && !state.wrapper.classList.contains("is-hidden")) {
+    const input = document.activeElement;
+    if (input && input.tagName === "TEXTAREA") positionPopup(input, input.selectionStart ?? 0);
+  }
+}
+
+function applyAllPopupSizes() {
+  for (const id of Object.keys(POPUP_SIZE_VARS)) {
+    let v;
+    try {
+      v = app.extensionManager?.setting?.get(id);
+    } catch {}
+    applyPopupSize(id, v ?? POPUP_SIZE_VARS[id][1]);
+  }
+}
+
+function createSliderWithReset({ min, max, step, def }) {
+  return (name, setter, value) => {
+    const box = document.createElement("div");
+    box.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+    const range = document.createElement("input");
+    range.type = "range";
+    range.min = min;
+    range.max = max;
+    range.step = step;
+    range.style.cssText = "flex:1;min-width:120px;";
+
+    const label = document.createElement("span");
+    label.style.cssText = "min-width:56px;text-align:right;";
+
+    const reset = document.createElement("button");
+    reset.textContent = "↺";
+    reset.style.cssText = "padding:2px 8px;cursor:pointer;";
+
+    const render = (v) => {
+      range.value = v;
+      label.textContent = `${v}px`;
+      reset.disabled = Number(v) === def;
+      reset.style.opacity = reset.disabled ? "0.4" : "1";
+      reset.style.cursor = reset.disabled ? "default" : "pointer";
+    };
+
+    const initial = Number(value);
+    render(Number.isFinite(initial) && initial >= min && initial <= max ? initial : def);
+
+    range.addEventListener("input", () => render(Number(range.value)));
+    range.addEventListener("change", () => setter(Number(range.value)));
+    reset.addEventListener("click", () => {
+      render(def);
+      setter(def);
+    });
+
+    box.append(range, label, reset);
+    return box;
+  };
+}
+
 app.registerExtension({
   name: EXTENSION_NAME,
 
@@ -1460,7 +1571,7 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.Language",
       name: T.language.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "0. Interface language"],
+      category: ["AnimaTagCompleter", T.mainGroup, "1. Interface language"],
       type: "combo",
       defaultValue: "en",
       options: [
@@ -1472,15 +1583,135 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.Enabled",
       name: T.enable.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "1. Enable this extension"],
+      category: ["AnimaTagCompleter", T.mainGroup, "2. Enable this extension"],
       type: "boolean",
       defaultValue: true,
       tooltip: T.enable.tooltip,
     },
     {
+      id: "AnimaTagCompleter.FavoritesDisplayMode",
+      name: T.favMode.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "3. Favorite tags display mode"],
+      type: "combo",
+      defaultValue: "trigger",
+      options: [
+        { text: T.favMode.options.trigger, value: "trigger" },
+        { text: T.favMode.options.focus, value: "focus" },
+      ],
+      tooltip: T.favMode.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.ShowDeprecated",
+      name: T.showDeprecated.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "4. Show tags from the 'Deprecated' category"],
+      type: "boolean",
+      defaultValue: true,
+    },
+    {
+      id: "AnimaTagCompleter.ScoreAbbreviation",
+      name: T.scoreAbbr.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "5. Score abbreviation (K/M/B)"],
+      type: "boolean",
+      defaultValue: true,
+      tooltip: T.scoreAbbr.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.ShowPreview",
+      name: T.showPreview.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "6. Show tag preview images"],
+      type: "boolean",
+      defaultValue: true,
+      tooltip: T.showPreview.tooltip,
+      onChange: (v) => {
+        if (!v && state.previewEl) state.previewEl.removeAttribute("src");
+      },
+    },
+    {
+      id: "AnimaTagCompleter.MinChars",
+      name: T.minChars.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "7. Minimum characters to trigger search"],
+      type: "number",
+      defaultValue: 2,
+      tooltip: T.minChars.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.MaxSuggestions",
+      name: T.maxSuggestions.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "8. Maximum number of suggestions"],
+      type: "number",
+      defaultValue: 30,
+    },
+    {
+      id: "AnimaTagCompleter.Delimiter",
+      name: T.delimiter.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "9. Separator type"],
+      type: "combo",
+      defaultValue: ",",
+      options: [
+        { text: T.delimiter.options.comma, value: "," },
+        { text: T.delimiter.options.period, value: "." },
+        { text: T.delimiter.options.none, value: "none" },
+      ],
+      tooltip: T.delimiter.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.ArtistPrefix",
+      name: T.artistPrefix.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "10. Artist tag prefix"],
+      type: "text",
+      defaultValue: "@",
+      tooltip: T.artistPrefix.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.TagDisplayMode",
+      name: T.tagDisplayMode.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "11. Tag display mode"],
+      type: "combo",
+      defaultValue: "highest",
+      options: [
+        { text: T.tagDisplayMode.options.all, value: "all" },
+        { text: T.tagDisplayMode.options.highest, value: "highest" },
+      ],
+      tooltip: T.tagDisplayMode.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.PopupWidth",
+      name: T.popupWidth.name,
+      category: ["AnimaTagCompleter", T.customGroup, "1. Popup width"],
+      type: createSliderWithReset({ min: 250, max: 1000, step: 10, def: 500 }),
+      defaultValue: 500,
+      tooltip: T.popupWidth.tooltip,
+      onChange: (v) => applyPopupSize("AnimaTagCompleter.PopupWidth", v),
+    },
+    {
+      id: "AnimaTagCompleter.FavoritesMaxHeight",
+      name: T.favMaxHeight.name,
+      category: ["AnimaTagCompleter", T.customGroup, "2. Favorites popup max height"],
+      type: createSliderWithReset({ min: 250, max: 500, step: 10, def: 250 }),
+      defaultValue: 250,
+      onChange: (v) => applyPopupSize("AnimaTagCompleter.FavoritesMaxHeight", v),
+    },
+    {
+      id: "AnimaTagCompleter.SuggestionsMaxHeight",
+      name: T.sugMaxHeight.name,
+      category: ["AnimaTagCompleter", T.customGroup, "3. Suggestions popup max height"],
+      type: createSliderWithReset({ min: 250, max: 1000, step: 10, def: 500 }),
+      defaultValue: 500,
+      onChange: (v) => applyPopupSize("AnimaTagCompleter.SuggestionsMaxHeight", v),
+    },
+    {
+      id: "AnimaTagCompleter.PreviewSize",
+      name: T.previewSize.name,
+      category: ["AnimaTagCompleter", T.customGroup, "4. Preview image width"],
+      type: createSliderWithReset({ min: 250, max: 750, step: 10, def: 250 }),
+      defaultValue: 250,
+      tooltip: T.previewSize.tooltip,
+      onChange: (v) => applyPopupSize("AnimaTagCompleter.PreviewSize", v),
+    },
+    {
       id: "AnimaTagCompleter.OpenCustom",
       name: T.openCustom.name,
-      category: ["AnimaTagCompleter", "tags source", "1. Open Custom"],
+      category: ["AnimaTagCompleter", T.sourcesGroup, "1. Open Custom"],
       tooltip: T.openCustom.tooltip,
       type: () => {
         const btn = document.createElement("button");
@@ -1497,7 +1728,7 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.Source.Danbooru",
       name: T.sources.danbooru.name,
-      category: ["AnimaTagCompleter", "tags source", "2. Danbooru"],
+      category: ["AnimaTagCompleter", T.sourcesGroup, "2. Danbooru"],
       type: "boolean",
       defaultValue: true,
       tooltip: T.sources.danbooru.tooltip,
@@ -1505,7 +1736,7 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.Source.Gelbooru",
       name: T.sources.gelbooru.name,
-      category: ["AnimaTagCompleter", "tags source", "3. Gelbooru"],
+      category: ["AnimaTagCompleter", T.sourcesGroup, "3. Gelbooru"],
       type: "boolean",
       defaultValue: true,
       tooltip: T.sources.gelbooru.tooltip,
@@ -1513,7 +1744,7 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.Source.Safebooru",
       name: T.sources.safebooru.name,
-      category: ["AnimaTagCompleter", "tags source", "4. Safebooru"],
+      category: ["AnimaTagCompleter", T.sourcesGroup, "4. Safebooru"],
       type: "boolean",
       defaultValue: false,
       tooltip: T.sources.safebooru.tooltip,
@@ -1521,7 +1752,7 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.Source.E621",
       name: T.sources.e621.name,
-      category: ["AnimaTagCompleter", "tags source", "5. E621"],
+      category: ["AnimaTagCompleter", T.sourcesGroup, "5. E621"],
       type: "boolean",
       defaultValue: false,
       tooltip: T.sources.e621.tooltip,
@@ -1529,91 +1760,17 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.Source.ThetaCursed",
       name: T.sources.thetacursed.name,
-      category: ["AnimaTagCompleter", "tags source", "6. ThetaCursed"],
+      category: ["AnimaTagCompleter", T.sourcesGroup, "6. ThetaCursed"],
       type: "boolean",
       defaultValue: true,
       tooltip: T.sources.thetacursed.tooltip,
-    },
-    {
-      id: "AnimaTagCompleter.FavoritesDisplayMode",
-      name: T.favMode.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "3. Favorite tags display mode"],
-      type: "combo",
-      defaultValue: "trigger",
-      options: [
-        { text: T.favMode.options.trigger, value: "trigger" },
-        { text: T.favMode.options.focus, value: "focus" },
-      ],
-      tooltip: T.favMode.tooltip,
-    },
-    {
-      id: "AnimaTagCompleter.ShowDeprecated",
-      name: T.showDeprecated.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "4. Show tags from the 'Deprecated' category"],
-      type: "boolean",
-      defaultValue: true,
-    },
-    {
-      id: "AnimaTagCompleter.ScoreAbbreviation",
-      name: T.scoreAbbr.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "5. Score abbreviation (K/M/B)"],
-      type: "boolean",
-      defaultValue: true,
-      tooltip: T.scoreAbbr.tooltip,
-    },
-    {
-      id: "AnimaTagCompleter.MinChars",
-      name: T.minChars.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "6. Minimum characters to trigger search"],
-      type: "number",
-      defaultValue: 2,
-      tooltip: T.minChars.tooltip,
-    },
-    {
-      id: "AnimaTagCompleter.MaxSuggestions",
-      name: T.maxSuggestions.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "7. Maximum number of suggestions"],
-      type: "number",
-      defaultValue: 30,
-    },
-    {
-      id: "AnimaTagCompleter.Delimiter",
-      name: T.delimiter.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "8. Separator type"],
-      type: "combo",
-      defaultValue: ",",
-      options: [
-        { text: T.delimiter.options.comma, value: "," },
-        { text: T.delimiter.options.period, value: "." },
-        { text: T.delimiter.options.none, value: "none" },
-      ],
-      tooltip: T.delimiter.tooltip,
-    },
-    {
-      id: "AnimaTagCompleter.ArtistPrefix",
-      name: T.artistPrefix.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "9. Artist tag prefix"],
-      type: "text",
-      defaultValue: "@",
-      tooltip: T.artistPrefix.tooltip,
-    },
-    {
-      id: "AnimaTagCompleter.TagDisplayMode",
-      name: T.tagDisplayMode.name,
-      category: ["AnimaTagCompleter", "AnimaTagCompleter", "10. Tag display mode"],
-      type: "combo",
-      defaultValue: "highest",
-      options: [
-        { text: T.tagDisplayMode.options.all, value: "all" },
-        { text: T.tagDisplayMode.options.highest, value: "highest" },
-      ],
-      tooltip: T.tagDisplayMode.tooltip,
     },
   ].reverse(),
 
   setup() {
     detachListeners();
     injectStyles();
+    applyAllPopupSizes();
     loadCustomCategories();
     attachListeners();
   },

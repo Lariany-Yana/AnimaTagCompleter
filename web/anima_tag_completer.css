@@ -1,17 +1,32 @@
 .tag-autocomplete-wrapper {
   position: absolute;
   z-index: 10000;
-  width: 500px;
+  width: var(--tag-autocomplete-wrapper-width, 500px);
   display: flex !important;
   flex-direction: column;
   margin-top: 10px;
+
+  &:has(.tag-autocomplete-item:hover) img.tag-image-preview[src] {
+    display: block;
+  }
+  img.tag-image-preview {
+    display: none;
+    position: absolute;
+    top: 0;
+    right: 100%;
+    margin-right: 10px;
+    max-width: var(--tag-image-preview-size, 250px);
+    max-height: var(--tag-autocomplete-popup-max-height, 500px);
+    box-shadow: 0 3px 9px rgba(0, 0, 0, 0.25);
+    object-fit: contain;
+    object-position: top center;
+  }
 }
 
 .tag-favorites-popup,
 .tag-autocomplete-popup {
   position: relative;
   min-height: 50px;
-  max-height: 500px;
   padding: 10px;
   box-sizing: border-box;
   overflow-y: auto;
@@ -29,6 +44,13 @@
   }
 }
 
+.tag-favorites-popup {
+  max-height: var(--tag-favorites-popup-max-height, 250px);
+}
+.tag-autocomplete-popup {
+  max-height: var(--tag-autocomplete-popup-max-height, 500px);
+}
+
 .tag-favorites-popup::-webkit-scrollbar-track,
 .tag-autocomplete-popup::-webkit-scrollbar-track {
   background: transparent;
@@ -38,11 +60,8 @@
   background-color: gray;
 }
 
-.tag-favorites-popup {
-  max-height: 250px;
-}
-
 .tag-autocomplete-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;

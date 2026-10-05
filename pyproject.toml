@@ -1,17 +1,7 @@
 [project]
 name = "animatagcompleter"
-description = """
-The extension is designed for Anima and offers simultaneous searching and tagcomplete across multiple tag sources:
-• Danbooru
-• Gelbooru
-• Safebooru
-• E621
-• ThetaCursed's Artist List
-Tags from all sources are organized into standard categories.
-
-See the README in the repository for details.
-"""
-version = "1.1.0"
+description = "The extension is designed for Anima and offers simultaneous searching and tagcomplete across multiple tag sources. See the README in the repository for details."
+version = "1.2.0"
 license = {file = "LICENSE"}
 
 [project.urls]

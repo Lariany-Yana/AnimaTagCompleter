@@ -9,8 +9,9 @@ try:
 except ImportError:
     PromptServer = None
 
-from .tag_database import tag_database
+from .tag_database import tag_database, EXTENSION_DIR
 
+PREVIEW_DIR = os.path.join(EXTENSION_DIR, "preview")
 DEFAULT_LIMIT = 20
 MIN_LIMIT = 1
 MAX_LIMIT = 200
@@ -65,6 +66,19 @@ def setup_routes():
         except Exception as e:
             print(f"[AnimaTagCompleter] list_sources failed: {e}")
             return web.json_response({"error": "list_failed"}, status=500)
+
+    @routes.get("/anima_tag_completer/preview/{path:.*}")
+    async def get_preview(request: web.Request) -> web.StreamResponse:
+        rel = request.match_info.get("path", "")
+        base = os.path.realpath(PREVIEW_DIR)
+        full = os.path.realpath(os.path.join(base, rel))
+        try:
+            inside = os.path.commonpath([base, full]) == base
+        except ValueError:
+            inside = False
+        if not inside or not os.path.isfile(full):
+            return web.Response(status=404)
+        return web.FileResponse(full, headers={"Cache-Control": "public, max-age=86400"})
 
     @routes.post("/anima_tag_completer/open_custom")
     async def open_custom(request: web.Request) -> web.Response:

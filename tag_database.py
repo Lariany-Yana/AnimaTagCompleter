@@ -10,13 +10,14 @@ DEFAULT_TAGS_DIR = os.path.join(EXTENSION_DIR, "tags")
 _NORM_TABLE = str.maketrans({"_": " ", "(": None, ")": None})
 
 class TagEntry:
-    __slots__ = ("name", "score", "category", "source", "name_norm", "_words")
+    __slots__ = ("name", "score", "category", "source", "preview", "name_norm", "_words")
 
-    def __init__(self, name, score, category, source):
+    def __init__(self, name, score, category, source, preview=""):
         self.name = name
         self.score = max(0.0, score)
         self.category = category
         self.source = source
+        self.preview = preview
         self.name_norm = name.translate(_NORM_TABLE).strip().lower()
         self._words = None
 
@@ -33,6 +34,7 @@ class TagEntry:
             "score": self.score,
             "category": self.category,
             "source": self.source,
+            "preview": self.preview,
         }
 
 
@@ -171,7 +173,8 @@ class TagDatabase:
                     if not name:
                         continue
                     score = TagDatabase._parse_score(row[1] if len(row) > 1 else None)
-                    result.append(TagEntry(name, score, category, source))
+                    preview = row[2].strip().replace("\\", "/").lstrip("/") if len(row) > 2 else ""
+                    result.append(TagEntry(name, score, category, source, preview))
         except OSError as e:
             print(f"[AnimaTagCompleter] Failed to read {file_path}: {e}")
         return result
