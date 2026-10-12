@@ -236,7 +236,10 @@ function parseFavoritesTrigger(fragment) {
   return { filterText: (match[1] || "").trim().toLowerCase() };
 }
 
-function spaceifyTagName(name) {
+function spaceifyTagName(name, source) {
+  if (String(source ?? "").toLowerCase() === "custom") {
+    return String(name ?? "");
+  }
   return String(name ?? "").replace(/_/g, " ");
 }
 
@@ -244,19 +247,20 @@ function escapeParens(s) {
   return s.replace(/([()])/g, "\\$1");
 }
 
-function normalizeTagText(name) {
-  return escapeParens(spaceifyTagName(name));
+function normalizeTagText(name, source) {
+  return escapeParens(spaceifyTagName(name, source));
 }
 
-function tagGroupKey(name) {
-  return String(name ?? "")
-    .replace(/_/g, " ")
-    .trim()
-    .toLowerCase();
+function tagGroupKey(name, source) {
+  const str = String(name ?? "");
+  if (String(source ?? "").toLowerCase() === "custom") {
+    return str.trim().toLowerCase();
+  }
+  return str.replace(/_/g, " ").trim().toLowerCase();
 }
 
-function buildHighlightParts(name, query) {
-  const spaced = spaceifyTagName(name);
+function buildHighlightParts(name, query, source) {
+  const spaced = spaceifyTagName(name, source);
   if (!query) return [{ text: spaced, highlight: false }];
 
   const stripped = [];
@@ -308,8 +312,8 @@ function matchPermutedWords(queryWords, nameWords) {
   return backtrack(0) ? assignment : null;
 }
 
-function buildFuzzyHighlightParts(name, query) {
-  const spaced = spaceifyTagName(name);
+function buildFuzzyHighlightParts(name, query, source) {
+  const spaced = spaceifyTagName(name, source);
   const queryWords = query.trim().split(/\s+/).filter(Boolean);
   if (queryWords.length < 2) return buildHighlightParts(name, query);
 
@@ -335,7 +339,7 @@ function buildFuzzyHighlightParts(name, query) {
   pieces.forEach((piece, idx) => {
     if (!piece) return;
     if (highlightByPieceIdx.has(idx)) {
-      parts.push(...buildHighlightParts(piece, highlightByPieceIdx.get(idx)));
+      parts.push(...buildHighlightParts(piece, highlightByPieceIdx.get(idx), source));
     } else {
       parts.push({ text: piece, highlight: false });
     }
@@ -489,7 +493,7 @@ function saveFavorites() {
 }
 
 function favoriteKey(tag) {
-  return `${tag?.source ?? ""}::${tag?.category ?? ""}::${tagGroupKey(tag?.name ?? "")}`.toLowerCase();
+  return `${tag?.source ?? ""}::${tag?.category ?? ""}::${tagGroupKey(tag?.name ?? "", tag?.source)}`.toLowerCase();
 }
 
 function findFavoriteIndex(tag) {
@@ -651,7 +655,7 @@ function createTagItemElement(tag, { highlightQuery = "", selected = false, onSe
   const nameEl = document.createElement("span");
   nameEl.className = "tag-autocomplete-name";
   const highlightFn = tag.__fuzzy ? buildFuzzyHighlightParts : buildHighlightParts;
-  highlightFn(tag.name, highlightQuery).forEach((part) => {
+  highlightFn(tag.name, highlightQuery, tag.source).forEach((part) => {
     if (part.highlight) {
       const mark = document.createElement("mark");
       mark.className = "tag-autocomplete-highlight";
@@ -722,9 +726,9 @@ function renderResultsSection({ keepScroll = false } = {}) {
 
   let i = 0;
   while (i < suggestions.length) {
-    const key = tagGroupKey(suggestions[i].name);
+    const key = tagGroupKey(suggestions[i].name, suggestions[i].source);
     let j = i + 1;
-    while (j < suggestions.length && tagGroupKey(suggestions[j].name) === key) j++;
+    while (j < suggestions.length && tagGroupKey(suggestions[j].name, suggestions[j].source) === key) j++;
 
     const clusterSize = j - i;
 
@@ -825,7 +829,7 @@ function renderFavoritesSection(filterText = "") {
 
   let favorites = getSortedFavorites();
   if (filterText) {
-    favorites = favorites.filter((f) => spaceifyTagName(f.name).toLowerCase().includes(filterText));
+    favorites = favorites.filter((f) => spaceifyTagName(f.name, f.source).toLowerCase().includes(filterText));
   }
 
   if (!favorites.length) {
@@ -836,7 +840,7 @@ function renderFavoritesSection(filterText = "") {
   const groups = [];
   const groupIndexByKey = new Map();
   favorites.forEach((tag) => {
-    const key = tagGroupKey(tag.name);
+    const key = tagGroupKey(tag.name, tag.source);
     if (!groupIndexByKey.has(key)) {
       groupIndexByKey.set(key, groups.length);
       groups.push([]);
@@ -981,7 +985,7 @@ function applyTag(tag) {
   let before = value.slice(0, fullStart);
   let after = value.slice(fullEnd);
 
-  let tagText = normalizeTagText(tag.name);
+  let tagText = normalizeTagText(tag.name, tag.source);
   if (settings.artistPrefix && tag.category && tag.category.toLowerCase() === "artist") {
     tagText = `${settings.artistPrefix}${tagText}`;
   }
@@ -1074,7 +1078,7 @@ function setElementValue(el, value, caret) {
 }
 
 function countUniqueTags(tags) {
-  return new Set(tags.map((t) => tagGroupKey(t.name))).size;
+  return new Set(tags.map((t) => tagGroupKey(t.name, t.source))).size;
 }
 
 function appendUniqueTags(base, incoming, markFuzzy = false) {
@@ -1143,7 +1147,7 @@ function reduceToHighestScore(suggestions) {
   const order = [];
 
   for (const tag of suggestions) {
-    const key = tagGroupKey(tag.name);
+    const key = tagGroupKey(tag.name, tag.source);
     const current = bestByKey.get(key);
     if (!current) {
       order.push(key);
@@ -1299,9 +1303,9 @@ function getSuggestionGroups() {
   const groups = [];
   let i = 0;
   while (i < suggestions.length) {
-    const key = tagGroupKey(suggestions[i].name);
+    const key = tagGroupKey(suggestions[i].name, suggestions[i].source);
     let j = i + 1;
-    while (j < suggestions.length && tagGroupKey(suggestions[j].name) === key) j++;
+    while (j < suggestions.length && tagGroupKey(suggestions[j].name, suggestions[j].source) === key) j++;
     groups.push([i, j]);
     i = j;
   }
