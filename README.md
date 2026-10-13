@@ -126,6 +126,7 @@ Example: `@gpt-image-2,,"Custom/@gpt-image-2.webp"`
 | Show tag preview images | `On`/`Off` Enables/Disables the tag preview images.<br>Default `On` |
 | Minimum characters to trigger search | `number` Determines how many characters need to be entered to start a tag search (does not affect category search).<br>Default `2` |
 | Maximum number of suggestions | `number` Determines how many tags will be shown in the list at most.<br>Default `30` |
+| Minimum tag score | `number` Hide tags with a score lower than this value. Tags without a score are always shown.<br>Default `0` |
 | Delimiter | `, (comma)`/`. (period)`/`None` Determines which delimiter will be inserted after a tag.<br>Default `, (comma)` |
 | Prefix before Artist category tags | `text` Choice of the prefix that will be used for tags from the Artist category.<br>Default `@` |
 | Tag display mode | `All matches`/`Highest score` Choice of how tags will be displayed in the list.<br>Default `Highest score` |
@@ -272,6 +273,7 @@ comfy node install animatagcompleter
 | Показывать превью тегов | `Вкл`/`Выкл` Включает/выключает показ картинок-превью при наведении на тег.<br>По-умолчанию `Вкл` |
 | Минимум символов для запуска поиска | `number` определяет сколько символов нужно ввести чтобы начался поиск по тегам (не влияет на поиск по категориям).<br>По-умолчанию `2` |
 | Максимум подсказок тегов | `number` Определяет сколько максимум тегов будет показываться в списке.<br>По-умолчанию `30` |
+| Минимальный score тега | `number` Скрывать теги со score меньше указанного значения. Теги без score отображаются в любом случае.<br>По-умолчанию `0` |
 | Разделитель | `, (запятая)`/`. (точка)`/`Нет` Определяет какой разделитель будет вставлятсья после тега.<br>По-умолчанию `, (запятая)` |
 | Префикс перед тегами категории Artist | `text` Выбор префикса, который будет использоваться для тегов из категории Artist.<br>По-умолчанию `@` |
 | Режим отображения тегов | `Все совпадения`/`Высший score` Выбор того как будут отображаться теги в списке.<br>По-умолчанию `Высший score` |

@@ -69,6 +69,7 @@ function getSettings() {
     tagDisplayMode: get("AnimaTagCompleter.TagDisplayMode", "all"),
     minChars: Number(get("AnimaTagCompleter.MinChars", 2)),
     maxSuggestions: Number(get("AnimaTagCompleter.MaxSuggestions", 30)),
+    minScore: Number(get("AnimaTagCompleter.MinScore", 0)),
     delimiter: get("AnimaTagCompleter.Delimiter", ","),
     artistPrefix: get("AnimaTagCompleter.ArtistPrefix", "@"),
     showDeprecated: get("AnimaTagCompleter.ShowDeprecated", false),
@@ -124,6 +125,7 @@ const TRANSLATIONS = {
     sugMaxHeight: { name: "Suggestions popup max height (px)" },
     previewSize: { name: "Preview image max width (px)", tooltip: "The maximum height is specified by the Suggestions popup max height." },
     showPreview: { name: "Show tag preview images", tooltip: "Enable/disable image previews on tag hover" },
+    minScore: { name: "Minimum tag score", tooltip: "Hide tags with a score lower than this value. Tags without a score are always shown." },
   },
   ru: {
     language: { name: "Язык интерфейса", tooltip: "Для применения нужна перезагрузка страницы", options: { en: "English", ru: "Русский" } },
@@ -171,6 +173,7 @@ const TRANSLATIONS = {
     sugMaxHeight: { name: "Максимальная высота окна подсказок (px)" },
     previewSize: { name: "Максимальная ширина превью тега (px)", tooltip: "Максимальная высота задаётся параметром Максимальная высота окна подсказок." },
     showPreview: { name: "Показывать превью тегов", tooltip: "Включает/выключает показ картинок-превью при наведении на тег" },
+    minScore: { name: "Минимальный score тега", tooltip: "Скрывать теги со score меньше указанного значения. Теги без score отображаются в любом случае." },
   },
 };
 
@@ -547,9 +550,25 @@ function toggleFavoriteGroup(tags) {
 }
 
 function getSortedFavorites() {
+  const catOrder = new Map();
+  let idx = 0;
+  for (const tag of state.favorites) {
+    const cat = String(tag.category ?? "").toLowerCase();
+    if (!catOrder.has(cat)) {
+      catOrder.set(cat, idx++);
+    }
+  }
+
   return [...state.favorites].sort((a, b) => {
-    const aArtist = String(a.category ?? "").toLowerCase() === "artist" ? 0 : 1;
-    const bArtist = String(b.category ?? "").toLowerCase() === "artist" ? 0 : 1;
+    const catA = String(a.category ?? "").toLowerCase();
+    const catB = String(b.category ?? "").toLowerCase();
+    const orderA = catOrder.get(catA) ?? Infinity;
+    const orderB = catOrder.get(catB) ?? Infinity;
+
+    if (orderA !== orderB) return orderA - orderB;
+
+    const aArtist = catA === "artist" ? 0 : 1;
+    const bArtist = catB === "artist" ? 0 : 1;
     return aArtist - bArtist;
   });
 }
@@ -638,7 +657,7 @@ function createTagItemElement(tag, { highlightQuery = "", selected = false, onSe
         if (favTrigger) {
           renderFavoritesSection(favTrigger.filterText);
         } else {
-          renderPopupContents();
+          renderPopupContents({ keepScroll: true });
         }
         updatePopupVisibility(state.activeElement, fullStart);
       } else {
@@ -758,7 +777,7 @@ function renderResultsSection({ keepScroll = false } = {}) {
           if (favTrigger) {
             renderFavoritesSection(favTrigger.filterText);
           } else {
-            renderPopupContents();
+            renderPopupContents({ keepScroll: true });
           }
           updatePopupVisibility(state.activeElement, fullStart);
         } else {
@@ -897,7 +916,7 @@ function renderFavoritesSection(filterText = "") {
   setDisplay(favoritesEl, "flex");
 }
 
-function renderPopupContents() {
+function renderPopupContents({ keepScroll = false } = {}) {
   const settings = getSettings();
   if (settings.favoritesDisplayMode === "focus") {
     renderFavoritesSection();
@@ -905,7 +924,7 @@ function renderPopupContents() {
     ensurePopup();
     setDisplay(state.favoritesEl, "none");
   }
-  renderResultsSection();
+  renderResultsSection({ keepScroll });
 }
 
 function updatePopupVisibility(el, anchorIndex) {
@@ -934,8 +953,9 @@ function closePopup() {
 }
 
 function showSuggestions(el, anchorIndex, suggestions) {
-  state.suggestions = suggestions;
-  state.selectedIndex = suggestions.length ? 0 : -1;
+  const settings = getSettings();
+  state.suggestions = filterByMinScore(suggestions, settings.minScore);
+  state.selectedIndex = state.suggestions.length ? 0 : -1;
   renderPopupContents();
   updatePopupVisibility(el, anchorIndex);
   if (state.resultsEl) state.resultsEl.scrollTop = 0;
@@ -1160,6 +1180,16 @@ function reduceToHighestScore(suggestions) {
   return order.map((key) => bestByKey.get(key));
 }
 
+function filterByMinScore(tags, minScore) {
+  if (!minScore || minScore <= 0) return tags;
+  return tags.filter((tag) => {
+    if (tag.score === undefined || tag.score === null || tag.score === "") return true;
+    const score = Number(tag.score);
+    if (isNaN(score)) return true;
+    return score >= minScore;
+  });
+}
+
 async function fetchSuggestionsWithFallback(parsed, settings, signal) {
   const wordCount = parsed.query.trim().split(/\s+/).filter(Boolean).length;
 
@@ -1205,7 +1235,8 @@ async function loadMoreSuggestions() {
     if (signal.aborted || state.pagination !== pg || requestId !== state.requestId || !state.suggestions.length) return;
 
     const combined = appendUniqueTags(state.suggestions, page.results, pg.mode === "fuzzy");
-    state.suggestions = settings.tagDisplayMode === "highest" ? reduceToHighestScore(combined) : combined;
+    const reduced = settings.tagDisplayMode === "highest" ? reduceToHighestScore(combined) : combined;
+    state.suggestions = filterByMinScore(reduced, settings.minScore);
     pg.offset = page.nextOffset;
     pg.hasMore = page.hasMore;
   } finally {
@@ -1646,9 +1677,17 @@ app.registerExtension({
       defaultValue: 30,
     },
     {
+      id: "AnimaTagCompleter.MinScore",
+      name: T.minScore.name,
+      category: ["AnimaTagCompleter", T.mainGroup, "9. Minimum tag score"],
+      type: "number",
+      defaultValue: 0,
+      tooltip: T.minScore.tooltip,
+    },
+    {
       id: "AnimaTagCompleter.Delimiter",
       name: T.delimiter.name,
-      category: ["AnimaTagCompleter", T.mainGroup, "9. Separator type"],
+      category: ["AnimaTagCompleter", T.mainGroup, "10. Separator type"],
       type: "combo",
       defaultValue: ",",
       options: [
@@ -1661,7 +1700,7 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.ArtistPrefix",
       name: T.artistPrefix.name,
-      category: ["AnimaTagCompleter", T.mainGroup, "10. Artist tag prefix"],
+      category: ["AnimaTagCompleter", T.mainGroup, "11. Artist tag prefix"],
       type: "text",
       defaultValue: "@",
       tooltip: T.artistPrefix.tooltip,
@@ -1669,7 +1708,7 @@ app.registerExtension({
     {
       id: "AnimaTagCompleter.TagDisplayMode",
       name: T.tagDisplayMode.name,
-      category: ["AnimaTagCompleter", T.mainGroup, "11. Tag display mode"],
+      category: ["AnimaTagCompleter", T.mainGroup, "12. Tag display mode"],
       type: "combo",
       defaultValue: "highest",
       options: [
