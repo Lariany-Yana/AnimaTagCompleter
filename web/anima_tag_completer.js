@@ -1181,13 +1181,12 @@ function reduceToHighestScore(suggestions) {
 }
 
 function filterByMinScore(tags, minScore) {
-  if (!minScore || minScore <= 0) return tags;
-  return tags.filter((tag) => {
-    if (tag.score === undefined || tag.score === null || tag.score === "") return true;
-    const score = Number(tag.score);
-    if (isNaN(score)) return true;
-    return score >= minScore;
-  });
+    if (!minScore || minScore <= 0) return tags;
+    return tags.filter((tag) => {
+        const score = Number(tag.score);
+        if (isNaN(score) || score <= 0) return true;
+        return score >= minScore;
+    });
 }
 
 async function fetchSuggestionsWithFallback(parsed, settings, signal) {
