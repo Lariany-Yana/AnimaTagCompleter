@@ -244,7 +244,8 @@
   }
 }
 
-.tag-show-more-btn {
+.tag-show-more-btn,
+.tag-random-btn {
   flex-shrink: 0;
   padding: 4px 6px;
   border: unset;
@@ -261,6 +262,10 @@
   &:disabled {
     display: none;
   }
+}
+
+.tag-random-btn {
+  min-height: 50px;
 }
 
 @keyframes searching {

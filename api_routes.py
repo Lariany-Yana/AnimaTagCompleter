@@ -117,6 +117,32 @@ def setup_routes():
 
     print("[AnimaTagCompleter] API routes registered")
 
+    @routes.get("/anima_tag_completer/random")
+    async def get_random_tag(request: web.Request) -> web.Response:
+        sources = _split(request.rel_url.query.get("source"))
+        categories = _split(request.rel_url.query.get("category"))
+        exclude_categories = _split(request.rel_url.query.get("exclude_category"))
+        try:
+            min_score = float(request.rel_url.query.get("min_score") or 0)
+        except ValueError:
+            min_score = 0.0
+        try:
+            loop = asyncio.get_running_loop()
+            tag = await loop.run_in_executor(
+                None,
+                lambda: tag_database.get_random(
+                    sources=sources,
+                    categories=categories,
+                    exclude_categories=exclude_categories,
+                    min_score=min_score,
+                )
+            )
+        except Exception as e:
+            print(f"[AnimaTagCompleter] Random failed: {e}")
+            return web.json_response({"error": "random_failed"}, status=500)
+        return web.json_response({"tag": tag})
+
+    print("[AnimaTagCompleter] API routes registered")
 
 def _split(value):
     if not value:

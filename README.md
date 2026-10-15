@@ -76,6 +76,7 @@ In the second case, only the source with the highest score is displayed.
 <img src="./web/img/4.webp" width="333" />
 
 ###
+- Enter "!random" to insert a random tag. Enter "!random" after "--category" to insert a random tag from that category.
 - When a tag is inserted, a space is automatically added before and after it.<br>
 If a delimiter is enabled, a space is also added after the delimiter.<br>
 If a tag is inserted into brackets, spaces and the delimiter are added outside them.
@@ -223,6 +224,7 @@ comfy node install animatagcompleter
 <img src="./web/img/4.webp" width="333" />
 
 ###
+- Введите "!random", чтобы вставить случайный тег. Введите "!random" после "--category", чтобы вставить случайный тег из этой категории.
 - При вставке тега автоматически добавляется пробел перед ним и после него.<br>
 Если включен разделитель, пробел добавляется после него.<br>
 Если тег вставляется в скобки, пробелы и разделитель добавляются снаружи их.

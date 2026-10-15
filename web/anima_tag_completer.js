@@ -17,6 +17,9 @@ const state = {
   lastQuery: "",
   customCategories: new Set(),
   pagination: null,
+  randomMode: false,
+  randomCategory: null,
+  randomLoading: false,
 };
 
 async function loadCustomCategories() {
@@ -78,6 +81,44 @@ function getSettings() {
   };
 }
 
+function parseRandomTrigger(fragment) {
+  const match = /^(?:--(\S+)\s+)?!random\s*$/i.exec(fragment.trim());
+  if (!match) return null;
+  return { category: match[1] || null };
+}
+
+async function insertRandomTag() {
+  if (state.randomLoading) return;
+  const el = state.activeElement;
+  if (!el) return;
+  const settings = getSettings();
+  const params = new URLSearchParams();
+  const sources = getActiveSources();
+  if (sources.length) params.set("source", sources.join(","));
+  if (state.randomCategory) {
+    params.set("category", state.randomCategory);
+  } else if (!settings.showDeprecated) {
+    params.set("exclude_category", "deprecated");
+  }
+  if (settings.minScore > 0) params.set("min_score", String(settings.minScore));
+
+  state.randomLoading = true;
+  renderResultsSection({ keepScroll: true });
+  try {
+    const res = await api.fetchApi(`/anima_tag_completer/random?${params.toString()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const tag = data?.tag;
+    if (!tag?.name) return;
+    if (state.activeElement !== el) return;
+    applyTag(tag);
+  } catch {
+  } finally {
+    state.randomLoading = false;
+    if (state.randomMode) renderResultsSection({ keepScroll: true });
+  }
+}
+
 const TRANSLATIONS = {
   en: {
     language: { name: "Interface language", tooltip: "Requires a page reload to take effect", options: { en: "English", ru: "Русский" } },
@@ -126,6 +167,12 @@ const TRANSLATIONS = {
     previewSize: { name: "Preview image max width (px)", tooltip: "The maximum height is specified by the Suggestions popup max height." },
     showPreview: { name: "Show tag preview images", tooltip: "Enable/disable image previews on tag hover" },
     minScore: { name: "Minimum tag score", tooltip: "Hide tags with a score lower than this value. Tags without a score are always shown." },
+    insertRandomTag: "Insert random tag",
+    commandsGroup: "4. Special commands",
+    cmdRandom: {
+      name: "!random",
+      desc: "Inserts a random tag. Use ''!random'' after ''--category'' to get a random tag from this category.",
+    },
   },
   ru: {
     language: { name: "Язык интерфейса", tooltip: "Для применения нужна перезагрузка страницы", options: { en: "English", ru: "Русский" } },
@@ -174,6 +221,12 @@ const TRANSLATIONS = {
     previewSize: { name: "Максимальная ширина превью тега (px)", tooltip: "Максимальная высота задаётся параметром Максимальная высота окна подсказок." },
     showPreview: { name: "Показывать превью тегов", tooltip: "Включает/выключает показ картинок-превью при наведении на тег" },
     minScore: { name: "Минимальный score тега", tooltip: "Скрывать теги со score меньше указанного значения. Теги без score отображаются в любом случае." },
+    insertRandomTag: "Вставить случайный тег",
+    commandsGroup: "4. Специальные команды",
+    cmdRandom: {
+      name: "!random",
+      desc: "Вставляет случайный тег. Чтобы вставить случайный тег из категории, нужно после ''--category'' добавить ''!random''.",
+    },
   },
 };
 
@@ -735,6 +788,22 @@ function renderResultsSection({ keepScroll = false } = {}) {
   const prevScroll = resultsEl.scrollTop;
   resultsEl.innerHTML = "";
 
+  if (state.randomMode) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tag-random-btn";
+    btn.textContent = T.insertRandomTag;
+    btn.disabled = state.randomLoading;
+    btn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      insertRandomTag();
+    });
+    resultsEl.appendChild(btn);
+    setDisplay(resultsEl, "flex");
+    return;
+  }
+
   if (!state.suggestions.length) {
     setDisplay(resultsEl, "none");
     return;
@@ -918,7 +987,10 @@ function renderFavoritesSection(filterText = "") {
 
 function renderPopupContents({ keepScroll = false } = {}) {
   const settings = getSettings();
-  if (settings.favoritesDisplayMode === "focus") {
+  if (state.randomMode) {
+    ensurePopup();
+    setDisplay(state.favoritesEl, "none");
+  } else if (settings.favoritesDisplayMode === "focus") {
     renderFavoritesSection();
   } else {
     ensurePopup();
@@ -949,6 +1021,9 @@ function closePopup() {
   hideSearchOverlay();
   state.suggestions = [];
   state.selectedIndex = -1;
+  state.randomMode = false;
+  state.randomCategory = null;
+  state.randomLoading = false;
   if (state.wrapper) setDisplay(state.wrapper, "none");
 }
 
@@ -1181,12 +1256,12 @@ function reduceToHighestScore(suggestions) {
 }
 
 function filterByMinScore(tags, minScore) {
-    if (!minScore || minScore <= 0) return tags;
-    return tags.filter((tag) => {
-        const score = Number(tag.score);
-        if (isNaN(score) || score <= 0) return true;
-        return score >= minScore;
-    });
+  if (!minScore || minScore <= 0) return tags;
+  return tags.filter((tag) => {
+    const score = Number(tag.score);
+    if (isNaN(score) || score <= 0) return true;
+    return score >= minScore;
+  });
 }
 
 async function fetchSuggestionsWithFallback(parsed, settings, signal) {
@@ -1276,6 +1351,23 @@ async function handleInput(e) {
         return;
       }
 
+      const randomTrigger = parseRandomTrigger(fragment);
+      if (randomTrigger) {
+        state.randomMode = true;
+        state.randomCategory = randomTrigger.category;
+        state.randomLoading = false;
+        state.suggestions = [];
+        state.selectedIndex = -1;
+        state.pagination = null;
+        hideSearchOverlay();
+        renderPopupContents();
+        updatePopupVisibility(el, fullStart);
+        return;
+      }
+      state.randomMode = false;
+      state.randomCategory = null;
+      state.randomLoading = false;
+
       const parsed = parseCategoryFilter(fragment);
       if (parsed.pending) {
         clearSearchResults(el, fullStart);
@@ -1348,6 +1440,14 @@ function handleKeydown(e) {
 
     if (e.key === "Escape") {
       closePopup();
+      return;
+    }
+
+    if (state.randomMode) {
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertRandomTag();
+      }
       return;
     }
 
@@ -1806,6 +1906,16 @@ app.registerExtension({
       type: "boolean",
       defaultValue: true,
       tooltip: T.sources.thetacursed.tooltip,
+    },
+    {
+      id: "AnimaTagCompleter.Commands.Info",
+      name: T.cmdRandom.name,
+      category: ["AnimaTagCompleter", T.commandsGroup, "1. Available commands"],
+      type: () => {
+        const desc = document.createElement("div");
+        desc.textContent = T.cmdRandom.desc;
+        return desc;
+      },
     },
   ].reverse(),
 

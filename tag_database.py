@@ -3,6 +3,7 @@ import csv
 import time
 import bisect
 import threading
+import random
 
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TAGS_DIR = os.path.join(EXTENSION_DIR, "tags")
@@ -355,6 +356,18 @@ class TagDatabase:
         with self._lock:
             return len(self._entries)
 
+    def get_random(self, sources=None, categories=None, exclude_categories=None, min_score=0.0):
+        self._ready.wait(30)
+        accept = self._make_filter(sources, categories, exclude_categories)
+        with self._lock:
+            entries = list(self._entries)
+        candidates = [
+            e for e in entries
+            if accept(e) and (min_score <= 0 or e.score >= min_score)
+        ]
+        if not candidates:
+            return None
+        return random.choice(candidates).to_dict()
 
 tag_database = TagDatabase()
 tag_database.load_async()
