@@ -1,7 +1,7 @@
 [project]
 name = "animatagcompleter"
 description = "The extension is designed for Anima and offers simultaneous searching and tagcomplete across multiple tag sources. See the README in the repository for details."
-version = "1.2.7"
+version = "1.2.8"
 license = {file = "LICENSE"}
 
 [project.urls]
@@ -11,5 +11,5 @@ Repository = "https://github.com/Lariany-Yana/AnimaTagCompleter"
 [tool.comfy]
 PublisherId = "larianyana"
 DisplayName = "AnimaTagCompleter"
-Icon = "https://github.com/Lariany-Yana/AnimaTagCompleter/blob/0c3bbf0084fdedbf6ec9a54782427ee3e9fd9adc/web/img/Icon.webp?raw=true"
-Banner = "https://github.com/Lariany-Yana/AnimaTagCompleter/blob/0c3bbf0084fdedbf6ec9a54782427ee3e9fd9adc/web/img/Banner.webp?raw=true"
+Icon = "https://raw.githubusercontent.com/Lariany-Yana/AnimaTagCompleter/0c3bbf0084fdedbf6ec9a54782427ee3e9fd9adc/web/img/Icon.webp"
+Banner = "https://raw.githubusercontent.com/Lariany-Yana/AnimaTagCompleter/0c3bbf0084fdedbf6ec9a54782427ee3e9fd9adc/web/img/Banner.webp"
